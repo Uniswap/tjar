@@ -38,6 +38,8 @@ contract TokenJar is Owned, ITokenJar {
 
   /// @inheritdoc ITokenJar
   function setReleaser(address _releaser) external onlyOwner {
+    require(_releaser != address(0), InvalidReleaser());
+    emit ReleaserRotated(releaser, _releaser);
     releaser = _releaser;
   }
 

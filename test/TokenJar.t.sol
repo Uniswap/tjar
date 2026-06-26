@@ -161,6 +161,27 @@ contract TokenJarTest is Test {
     assertEq(tokenJar.releaser(), address(mockReleaser));
   }
 
+  function test_setReleaser_RevertsOnZeroAddress() public {
+    vm.prank(owner);
+    vm.expectRevert(ITokenJar.InvalidReleaser.selector);
+    tokenJar.setReleaser(address(0));
+
+    // releaser is unchanged
+    assertEq(tokenJar.releaser(), address(mockReleaser));
+  }
+
+  function test_setReleaser_EmitsReleaserRotated() public {
+    MockReleaser newReleaser = new MockReleaser(payable(address(tokenJar)));
+
+    vm.expectEmit(true, true, false, true, address(tokenJar));
+    emit ITokenJar.ReleaserRotated(address(mockReleaser), address(newReleaser));
+
+    vm.prank(owner);
+    tokenJar.setReleaser(address(newReleaser));
+
+    assertEq(tokenJar.releaser(), address(newReleaser));
+  }
+
   /*//////////////////////////////////////////////////////////////
                            FUZZ TESTS
     //////////////////////////////////////////////////////////////*/
