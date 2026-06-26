@@ -15,6 +15,7 @@ While it originated as Uniswap's protocol-fee mechanism (accumulate fees → red
 
 ```
 Fee Sources → Token Jar → Releaser → (redeemer pays RESOURCE) → RESOURCE_RECIPIENT
+                                                  └→ optional protocol fee → FeeController.feeRecipient
 ```
 
 ## Architecture
@@ -35,15 +36,26 @@ Releasers serve as the Token Jar's `releaser` and implement the redemption logic
 - [`Firepit.sol`](src/releasers/Firepit.sol) — concrete releaser that **burns** the `RESOURCE` by setting `RESOURCE_RECIPIENT = 0xdead`. On a chain where the revenue token is native (e.g. UNI on Ethereum mainnet), redemption directly burns it.
 - [`OptimismBridgedResourceFirepit.sol`](src/releasers/OptimismBridgedResourceFirepit.sol) — concrete releaser for OP Stack L2s where only a bridged form of the revenue token exists. It implements a two-stage burn: collected tokens are held on L2, then an `_afterRelease()` hook initiates an L2→L1 bridge withdrawal via the [L2 Standard Bridge](src/interfaces/external/IL2StandardBridge.sol). After the bridge's challenge period, the underlying token is delivered to `0xdead` on L1.
 
+### Protocol Fee
+
+[`FeeController.sol`](src/FeeController.sol) is a chain-wide singleton holding an **optional protocol fee** charged *on top of* a release's `threshold`. It is independent of any individual Releaser: Releasers are designed to hold an immutable reference to it and read its configuration when pricing a release, so the fee can be changed in one place without touching partner contracts.
+
+- **On top of the threshold** — `threshold` stays the partner's net amount; the fee is `threshold * feeBps / 10_000`, paid by the redeemer in the current `RESOURCE`. It starts at **0 bps**, so there is no fee by default.
+- **Capped** — `feeBps` can never exceed `MAX_FEE_BPS` (1000 bps = 10%), a compile-time constant.
+- **Atomic read** — `feeConfig()` returns `(feeBps, feeRecipient)` in a single call, so redeemers and Releasers always price against consistent state.
+- **Governance-owned** — the owner is intended to be the **Uniswap governance address**; only it can change the fee or recipient. Partners cannot zero it out.
+- **Fee recipient** — intended to be the **Uniswap Token Jar address**, so protocol fees accumulate alongside Uniswap's own fees and are redeemed through Uniswap's own Releaser. A non-zero fee cannot be enabled until a recipient is set.
+- **Deterministic** — deployed once per chain at the same address via CREATE2 (no constructor args); the owner and recipient are configured post-deploy.
+
 ### Base & interfaces
 
 - [`ResourceManager.sol`](src/base/ResourceManager.sol) — defines the `RESOURCE` token and the `threshold` amount required per release.
 - [`Nonce.sol`](src/base/Nonce.sol) — sequences pending releases to prevent front-running.
-- [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`), plus the external `IL2StandardBridge`.
+- [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), [`IFeeController`](src/interfaces/IFeeController.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`), plus the external `IL2StandardBridge`.
 
 ## Economic Incentives
 
-Redemption is permissionless and competitive: a redeemer profits whenever the value of the assets accumulated in the Token Jar exceeds the fixed `RESOURCE` cost of a release. This means no manual intervention, keeper network, or price oracle is required — economic actors collect and convert fees on their own schedule purely for profit. Fixed redemption amounts limit MEV extraction, and sequential nonces make ordering deterministic.
+Redemption is permissionless and competitive: a redeemer profits whenever the value of the assets accumulated in the Token Jar exceeds the `RESOURCE` cost of a release — the partner's `threshold` plus any protocol fee. This means no manual intervention, keeper network, or price oracle is required — economic actors collect and convert fees on their own schedule purely for profit. Fixed redemption amounts limit MEV extraction, and sequential nonces make ordering deterministic.
 
 ## Development
 
@@ -77,12 +89,14 @@ forge coverage        # coverage report
 ```
 src/
 ├── TokenJar.sol                        // Accumulates fees; only the releaser can withdraw
+├── FeeController.sol                    // Chain-wide singleton holding the optional protocol fee
 ├── base
 │   ├── Nonce.sol                       // Sequences pending releases to prevent front-running
 │   └── ResourceManager.sol             // Defines the RESOURCE token and release threshold
 ├── interfaces
 │   ├── ITokenJar.sol
 │   ├── IReleaser.sol
+│   ├── IFeeController.sol
 │   ├── base/                           // INonce, IOwned, IResourceManager
 │   └── external/IL2StandardBridge.sol
 └── releasers
@@ -92,6 +106,7 @@ src/
 
 test
 ├── TokenJar.t.sol
+├── FeeController.t.sol
 ├── ExchangeReleaser.t.sol
 ├── Firepit.t.sol
 ├── OptimismBridgedResourceFirepit.t.sol
