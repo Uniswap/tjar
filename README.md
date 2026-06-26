@@ -81,12 +81,6 @@ Fee Sources are adapter contracts that channel fees from various protocols into 
 - 1/6 of swap fees collected as protocol revenue
 - Zero additional infrastructure required
 
-**Uniswap V3**
-
-- V3FeeAdapter contract owns factory privileges
-- Permissionless protocol fee collection
-- Configurable fee rates per fee tier
-
 **Uniswap V4 (TBD)**
 
 - V4FeeAdapter as ProtocolFeeAdapter
@@ -207,7 +201,6 @@ Ethereum Mainnet
 ├── Token Jar
 ├── UNI Burn Releaser (Firepit.sol)
 ├── V2 Fee Source (feeTo)
-├── V3 Fee Source (V3FeeAdapter.sol)
 ```
 
 > Crosschain system coming at a later date
@@ -221,7 +214,6 @@ Ethereum Mainnet
 | MainnetDeployer | [`0xd3Aa12B99892b7D95BBAA27AEf222A8E2a038C0C`](https://etherscan.io/address/0xd3Aa12B99892b7D95BBAA27AEf222A8E2a038C0C) |
 | TokenJar | [`0xf38521f130fcCF29dB1961597bc5d2B60F995f85`](https://etherscan.io/address/0xf38521f130fcCF29dB1961597bc5d2B60F995f85) |
 | Releaser (Firepit) | [`0x0D5Cd355e2aBEB8fb1552F56c965B867346d6721`](https://etherscan.io/address/0x0D5Cd355e2aBEB8fb1552F56c965B867346d6721) |
-| V3FeeAdapter | [`0x5E74C9f42EEd283bFf3744fBD1889d398d40867d`](https://etherscan.io/address/0x5E74C9f42EEd283bFf3744fBD1889d398d40867d) |
 | UNI Vesting | [`0xCa046A83EDB78F74aE338bb5A291bF6FdAc9e1D2`](https://etherscan.io/address/0xCa046A83EDB78F74aE338bb5A291bF6FdAc9e1D2) |
 | Agreement Anchor 1 | [`0xC707467e7fb43Fe7Cc55264F892Dd2D7f8Fc27C8`](https://etherscan.io/address/0xC707467e7fb43Fe7Cc55264F892Dd2D7f8Fc27C8) |
 | Agreement Anchor 2 | [`0x33A56942Fe57f3697FE0fF52aB16cb0ba9b8eadd`](https://etherscan.io/address/0x33A56942Fe57f3697FE0fF52aB16cb0ba9b8eadd) |
@@ -279,11 +271,8 @@ src/
 │   ├── Nonce.sol             // Utility contract to safely sequence multiple pending transactions
 │   └── ResourceManager.sol.  // Utility contract for defining the `RESOURCE` token and its amount requirements
 ├── feeAdapters
-│   ├── V3FeeAdapter.sol   // Logic for Uniswap v3 fee-setting and collection
 │   └── V4FeeAdapter.sol   // Work-in-progress logic for Uniswap v4 fee-setting and collection
 ├── interfaces/               // interfaces
-├── libraries
-│   ├── ArrayLib.sol          // Utility library
 └── releasers
     ├── ExchangeReleaser.sol              // Abstract contract to exchange a RESOURCE for Token Jar assets
     ├── Firepit.sol                       // Burns UNI directly on mainnet (RESOURCE_RECIPIENT = 0xdead)
@@ -296,7 +285,6 @@ test
 ├── Firepit.t.sol
 ├── OptimismBridgedResourceFirepit.t.sol  // Tests for L2 bridge burn mechanism
 ├── ProtocolFees.fork.t.sol               // Fork tests against Ethereum Mainnet, using Deployer.sol
-├── V3FeeAdapter.t.sol
 ├── V4FeeAdapter.t.sol
 ├── interfaces/                           // interfaces for integrations
 ├── mocks/                                // mocks and examples

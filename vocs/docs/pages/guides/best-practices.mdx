@@ -40,32 +40,6 @@ contract SafeRelease {
 ```
 In the safe pattern, the caller is responsible for reading the `Firepit.nonce()` offchain, assocating it with releasable assets, and passing it as a parameter.
 
-## Collect Uniswap v3 Fees
-
-For further reading, please see [Read Asset Balance](/guides/read-asset-balance)
-
-In the ProtocolFees system, Uniswap v3 fees *must be collected* to the `TokenJar` before they are eligible for release.
-
-:::tip
-We recommend that integrators check and collect Uniswap v3 fees before calling `Firepit.release()`, to ensure the maximum assets are released.
-
-[IV3FeeAdapter.collect()](/technical-reference/IV3FeeAdapter#collect)
-
-```solidity
-IV3FeeAdapter v3FeeAdapter;
-
-function collectAndRelease(
-    IV3FeeAdapter.CollectParams memory collectParams,
-    uint256 _nonce,
-    Currency[] memory assets,
-    address recipient
-) external {
-    v3FeeAdapter.collect(collectParams);
-    firepit.release(_nonce, assets, recipient);
-}
-```
-:::
-
 ## UNI Approvals
 
 The ProtocolFees system allows for an *updatable* [`Firepit.threshold()`](/technical-reference/IResourceManager#threshold)

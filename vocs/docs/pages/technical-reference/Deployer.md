@@ -17,13 +17,6 @@ IReleaser public immutable RELEASER
 ```
 
 
-### FEE_ADAPTER
-
-```solidity
-IV3FeeAdapter public immutable FEE_ADAPTER
-```
-
-
 ### RESOURCE
 
 ```solidity
@@ -60,13 +53,6 @@ bytes32 constant SALT_RELEASER = 0
 ```
 
 
-### SALT_FEE_ADAPTER
-
-```solidity
-bytes32 constant SALT_FEE_ADAPTER = 0
-```
-
-
 ## Functions
 ### constructor
 
@@ -77,11 +63,6 @@ RELEASER:
 2. Deploy the Releaser.
 5. Update the thresholdSetter on the releaser to the owner.
 6. Update the owner on the releaser.
-FEE_ADAPTER:
-7. Deploy the FeeAdapter.
-8. Update the feeSetter to the owner.
-9. Store fee tiers.
-10. Update the owner on the fee adapter.
 
 
 ```solidity
