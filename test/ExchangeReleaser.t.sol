@@ -2,9 +2,10 @@
 pragma solidity ^0.8.29;
 
 import {ProtocolFeesTestBase} from "./utils/ProtocolFeesTestBase.sol";
-import {CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {ExchangeReleaserMock} from "./mocks/ExchangeReleaserMock.sol";
 import {INonce} from "../src/interfaces/base/INonce.sol";
+import {IResourceManager} from "../src/interfaces/base/IResourceManager.sol";
 import {IReleaser} from "../src/interfaces/IReleaser.sol";
 
 contract ExchangeReleaserTest is ProtocolFeesTestBase {
@@ -208,5 +209,65 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     // Attempt to frontrun with the same nonce
     vm.expectRevert(INonce.InvalidNonce.selector);
     swapReleaser.release(nonce, releaseMockToken, alice);
+  }
+
+  /// @dev on a single chain releaser, malicious tokens will hard revert
+  function test_revert_release_revertingToken() public {
+    uint256 nonce = swapReleaser.nonce();
+    vm.startPrank(alice);
+    resource.approve(address(swapReleaser), type(uint256).max);
+
+    vm.expectRevert();
+    swapReleaser.release(nonce, releaseMockReverting, alice);
+  }
+
+  function test_revert_release_tooManyAssets() public {
+    Currency[] memory assets = new Currency[](21);
+    for (uint256 i = 0; i < 21; i++) {
+      assets[i] = Currency.wrap(address(mockToken));
+    }
+
+    uint256 nonce = swapReleaser.nonce();
+
+    vm.expectRevert(IReleaser.TooManyAssets.selector);
+    swapReleaser.release(nonce, assets, alice);
+  }
+
+  function test_fuzz_setThresholdSetter(address caller, address newSetter) public {
+    vm.startPrank(caller);
+    if (caller != swapReleaser.owner()) vm.expectRevert("UNAUTHORIZED");
+    swapReleaser.setThresholdSetter(newSetter);
+    vm.stopPrank();
+  }
+
+  function test_fuzz_revert_setThreshold(address caller, uint256 newThreshold) public {
+    vm.startPrank(caller);
+    if (caller != swapReleaser.thresholdSetter()) {
+      vm.expectRevert(IResourceManager.Unauthorized.selector);
+    }
+    swapReleaser.setThreshold(newThreshold);
+    vm.stopPrank();
+  }
+
+  function test_fuzz_newThreshold(uint256 newThreshold) public {
+    vm.assume(newThreshold != swapReleaser.threshold());
+
+    vm.prank(owner);
+    swapReleaser.setThreshold(newThreshold);
+
+    deal(address(resource), alice, newThreshold);
+
+    assertEq(resource.balanceOf(alice), newThreshold);
+    assertEq(resource.balanceOf(recipient), 0);
+
+    uint256 currentNonce = swapReleaser.nonce();
+
+    vm.startPrank(alice);
+    resource.approve(address(swapReleaser), newThreshold);
+    swapReleaser.release(currentNonce, releaseMockBoth, alice);
+
+    assertEq(swapReleaser.nonce(), currentNonce + 1);
+    assertEq(resource.balanceOf(alice), 0);
+    assertEq(resource.balanceOf(recipient), swapReleaser.threshold());
   }
 }

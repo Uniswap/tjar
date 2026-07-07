@@ -5,7 +5,7 @@
 > **Derivative notice**
 > This repository is a derivative of [Uniswap/protocol-fees](https://github.com/Uniswap/protocol-fees) at the [`unification-proposal`](https://github.com/Uniswap/protocol-fees/tree/unification-proposal) ref, **pruned to the TJAR scope** — the Token Jar and Releaser contracts and their supporting base/interfaces.
 >
-> Everything specific to the Uniswap fee rollout — the V3 fee adapter, Merkle generator, deployers, deploy scripts, UNI vesting, the EAS agreement-anchor signing flow, and the governance proposal — has been removed. For the canonical Uniswap deployment, governance proposal, and fee adapters, see the upstream repository.
+> Everything specific to the Uniswap fee rollout — the V3 fee adapter, Merkle generator, deployers, deploy scripts, UNI vesting, the EAS agreement-anchor signing flow, the governance proposal, and the Firepit burn releasers (`Firepit`, `OptimismBridgedResourceFirepit`) — has been removed. For the canonical Uniswap deployment, governance proposal, fee adapters, and Firepits, see the upstream repository.
 
 ## Overview
 
@@ -30,11 +30,20 @@ Fee Sources → Token Jar → Releaser → (redeemer pays RESOURCE) → RESOURCE
 
 ### Releasers
 
-Releasers serve as the Token Jar's `releaser` and implement the redemption logic. They are built on a shared abstract base:
+Releasers serve as the Token Jar's `releaser` and implement the redemption logic:
 
-- [`ExchangeReleaser.sol`](src/releasers/ExchangeReleaser.sol) — abstract base. A redeemer pays a fixed `threshold` amount of the `RESOURCE` token and, in exchange, the Token Jar's accumulated assets are released to a recipient they specify. Subclasses decide what happens to the collected `RESOURCE` by setting `RESOURCE_RECIPIENT`. Sequential nonces (see [`Nonce.sol`](src/base/Nonce.sol)) prevent front-running and enforce deterministic ordering.
-- [`Firepit.sol`](src/releasers/Firepit.sol) — concrete releaser that **burns** the `RESOURCE` by setting `RESOURCE_RECIPIENT = 0xdead`. On a chain where the revenue token is native (e.g. UNI on Ethereum mainnet), redemption directly burns it.
-- [`OptimismBridgedResourceFirepit.sol`](src/releasers/OptimismBridgedResourceFirepit.sol) — concrete releaser for OP Stack L2s where only a bridged form of the revenue token exists. It implements a two-stage burn: collected tokens are held on L2, then an `_afterRelease()` hook initiates an L2→L1 bridge withdrawal via the [L2 Standard Bridge](src/interfaces/external/IL2StandardBridge.sol). After the bridge's challenge period, the underlying token is delivered to `0xdead` on L1.
+- [`ExchangeReleaser.sol`](src/releasers/ExchangeReleaser.sol) — abstract base. A redeemer pays a fixed `threshold` amount of the `RESOURCE` token and, in exchange, the Token Jar's accumulated assets are released to a recipient they specify. The collected `RESOURCE` is forwarded to the `RESOURCE_RECIPIENT` configured at deployment. Sequential nonces (see [`Nonce.sol`](src/base/Nonce.sol)) prevent front-running and enforce deterministic ordering.
+
+#### Burn configurations (what happened to Firepit)
+
+Upstream `protocol-fees` ships **Firepit** releasers that burn the `RESOURCE` by hard-coding the recipient to `0xdead`. TJAR removed them: burning is a *configuration* of the Releaser, not a separate contract — and the immutability a hard-coded burn address appears to offer is weaker than it looks, because the Token Jar owner can always rotate to a different releaser via `setReleaser`. A burn commitment is a property of the whole system (Jar ownership *and* Releaser config), never of the Releaser alone.
+
+To replicate a Firepit in TJAR, pick the guarantee level you actually need:
+
+1. **Burn economics** — deploy the Releaser with `RESOURCE_RECIPIENT = 0xdead`. Every release burns the revenue token, but the owner retains control.
+2. **Trust-minimized burn** — additionally place ownership of the Jar and the Releaser behind a timelock or governance, so any change of terms is slow and publicly visible.
+3. **Trustless burn** — relinquish control entirely: revoke the setter role (set it to `address(0)`) and transfer ownership of **both** the Releaser and the Token Jar to `address(0)` (solmate `Owned` permits this). Nothing — recipient, threshold, or the jar↔releaser wiring — can ever change again. The trade-off is a frozen `threshold`: if the revenue token's price drifts far enough, releases become over- or under-priced forever, with no way to retune.
+4. **Exactly upstream semantics** (immutable burn recipient with a governance-tunable threshold) — deploy the audited Firepit from [Uniswap/protocol-fees](https://github.com/Uniswap/protocol-fees) itself. TJAR intentionally doesn't maintain a parallel copy.
 
 ### Protocol Fee
 
@@ -51,7 +60,7 @@ Releasers serve as the Token Jar's `releaser` and implement the redemption logic
 
 - [`ResourceManager.sol`](src/base/ResourceManager.sol) — defines the `RESOURCE` token and the `threshold` amount required per release.
 - [`Nonce.sol`](src/base/Nonce.sol) — sequences pending releases to prevent front-running.
-- [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), [`IFeeController`](src/interfaces/IFeeController.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`), plus the external `IL2StandardBridge`.
+- [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), [`IFeeController`](src/interfaces/IFeeController.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`).
 
 ## Economic Incentives
 
@@ -97,19 +106,14 @@ src/
 │   ├── ITokenJar.sol
 │   ├── IReleaser.sol
 │   ├── IFeeController.sol
-│   ├── base/                           // INonce, IOwned, IResourceManager
-│   └── external/IL2StandardBridge.sol
+│   └── base/                           // INonce, IOwned, IResourceManager
 └── releasers
-    ├── ExchangeReleaser.sol            // Abstract: exchange RESOURCE for Token Jar assets
-    ├── Firepit.sol                     // Burns RESOURCE directly (RESOURCE_RECIPIENT = 0xdead)
-    └── OptimismBridgedResourceFirepit.sol // Two-stage burn for OP Stack L2s via bridge withdrawal
+    └── ExchangeReleaser.sol            // Abstract: exchange RESOURCE for Token Jar assets
 
 test
 ├── TokenJar.t.sol
 ├── FeeController.t.sol
 ├── ExchangeReleaser.t.sol
-├── Firepit.t.sol
-├── OptimismBridgedResourceFirepit.t.sol
 ├── mocks/                              // mock tokens and releasers
 └── utils/                             // shared test base
 ```

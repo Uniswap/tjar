@@ -8,10 +8,8 @@ import {OOGToken} from "../mocks/OOGToken.sol";
 import {RevertBombToken} from "../mocks/RevertBombToken.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 
-import {Firepit} from "../../src/releasers/Firepit.sol";
 import {TokenJar, ITokenJar} from "../../src/TokenJar.sol";
 import {FeeController} from "../../src/FeeController.sol";
-import {IReleaser} from "../../src/interfaces/IReleaser.sol";
 
 contract ProtocolFeesTestBase is Test {
   address owner;
@@ -26,7 +24,6 @@ contract ProtocolFeesTestBase is Test {
   RevertBombToken revertBombToken;
 
   ITokenJar tokenJar;
-  IReleaser firepit;
   FeeController feeController;
 
   uint256 public constant INITIAL_TOKEN_AMOUNT = 1000e18;
@@ -69,11 +66,6 @@ contract ProtocolFeesTestBase is Test {
     // Protocol fee starts at 0 bps; tests that exercise the fee opt in via setFeeBps
     feeController = new FeeController();
     feeController.setFeeRecipient(protocolFeeRecipient);
-    firepit = new Firepit(
-      address(resource), INITIAL_TOKEN_AMOUNT, address(tokenJar), address(feeController)
-    );
-
-    firepit.setThresholdSetter(owner);
 
     revertingToken.setRevertFrom(address(tokenJar), true);
 
