@@ -8,14 +8,15 @@ import {Predeploys} from "@eth-optimism-bedrock/src/libraries/Predeploys.sol";
 
 import {OptimismBridgedResourceFirepit} from "../src/releasers/OptimismBridgedResourceFirepit.sol";
 import {TokenJar, ITokenJar} from "../src/TokenJar.sol";
+import {FeeController} from "../src/FeeController.sol";
 import {INonce} from "../src/interfaces/base/INonce.sol";
 import {IResourceManager} from "../src/interfaces/base/IResourceManager.sol";
 import {IL2StandardBridge} from "../src/interfaces/external/IL2StandardBridge.sol";
 
 // Concrete implementation of abstract OptimismBridgedResourceFirepit for testing
 contract TestOptimismBridgedResourceFirepit is OptimismBridgedResourceFirepit {
-  constructor(address _resource, uint256 _threshold, address _tokenJar)
-    OptimismBridgedResourceFirepit(_resource, _threshold, _tokenJar)
+  constructor(address _resource, uint256 _threshold, address _tokenJar, address _feeController)
+    OptimismBridgedResourceFirepit(_resource, _threshold, _tokenJar, _feeController)
   {
     // Approve the L2 Standard Bridge to transfer our resource tokens
     // Note on real OP stack chains with OptimismMintableERC20, this approval would not be needed
@@ -81,9 +82,12 @@ contract OptimismBridgedResourceFirepitTest is Test {
     // Deploy tokenJar (no prank needed - deployer is the test contract)
     tokenJar = new TokenJar();
 
+    // Deploy fee controller (fee stays at 0 bps for these tests)
+    FeeController feeController = new FeeController();
+
     // Deploy OptimismBridgedResourceFirepit (deployer is the test contract, becomes owner)
     firepit = new TestOptimismBridgedResourceFirepit(
-      address(resource), INITIAL_THRESHOLD, address(tokenJar)
+      address(resource), INITIAL_THRESHOLD, address(tokenJar), address(feeController)
     );
 
     // Set up permissions

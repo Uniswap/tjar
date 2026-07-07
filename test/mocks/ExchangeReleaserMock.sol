@@ -4,7 +4,11 @@ pragma solidity ^0.8.29;
 import {ExchangeReleaser} from "../../src/releasers/ExchangeReleaser.sol";
 
 contract ExchangeReleaserMock is ExchangeReleaser {
-  constructor(address _resource, uint256 _threshold, address _tokenJar, address _recipient)
-    ExchangeReleaser(_resource, _threshold, _tokenJar, _recipient)
-  {}
+  constructor(
+    address _resource,
+    uint256 _threshold,
+    address _tokenJar,
+    address _recipient,
+    address _feeController
+  ) ExchangeReleaser(_resource, _threshold, _tokenJar, _recipient, _feeController) {}
 }

@@ -10,12 +10,14 @@ import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 
 import {Firepit} from "../../src/releasers/Firepit.sol";
 import {TokenJar, ITokenJar} from "../../src/TokenJar.sol";
+import {FeeController} from "../../src/FeeController.sol";
 import {IReleaser} from "../../src/interfaces/IReleaser.sol";
 
 contract ProtocolFeesTestBase is Test {
   address owner;
   address alice;
   address bob;
+  address protocolFeeRecipient;
   MockERC20 resource;
   MockERC20 mockToken;
   MockERC20 mockToken1;
@@ -25,6 +27,7 @@ contract ProtocolFeesTestBase is Test {
 
   ITokenJar tokenJar;
   IReleaser firepit;
+  FeeController feeController;
 
   uint256 public constant INITIAL_TOKEN_AMOUNT = 1000e18;
   uint256 public constant INITIAL_NATIVE_AMOUNT = 10 ether;
@@ -52,6 +55,7 @@ contract ProtocolFeesTestBase is Test {
     owner = makeAddr("owner");
     alice = makeAddr("alice");
     bob = makeAddr("bob");
+    protocolFeeRecipient = makeAddr("protocolFeeRecipient");
 
     resource = new MockERC20("BurnableResource", "BNR", 18);
     mockToken = new MockERC20("MockToken", "MTK", 18);
@@ -62,7 +66,12 @@ contract ProtocolFeesTestBase is Test {
 
     vm.startPrank(owner);
     tokenJar = new TokenJar();
-    firepit = new Firepit(address(resource), INITIAL_TOKEN_AMOUNT, address(tokenJar));
+    // Protocol fee starts at 0 bps; tests that exercise the fee opt in via setFeeBps
+    feeController = new FeeController();
+    feeController.setFeeRecipient(protocolFeeRecipient);
+    firepit = new Firepit(
+      address(resource), INITIAL_TOKEN_AMOUNT, address(tokenJar), address(feeController)
+    );
 
     firepit.setThresholdSetter(owner);
 

@@ -31,10 +31,11 @@ contract OptimismBridgedResourceFirepit is ExchangeReleaser {
   /// @param _resource The address of the resource token (must be OptimismMintableERC20)
   /// @param _threshold The minimum amount of resource tokens required for exchange
   /// @param _tokenJar The address of the TokenJar contract holding accumulated fee assets
+  /// @param _feeController The address of the singleton protocol fee controller
   /// @dev Sets RESOURCE_RECIPIENT to address(this) to enable the two-stage burn:
   ///      Stage 1: Collect tokens here (L2) -> Stage 2: Bridge and burn on L1
-  constructor(address _resource, uint256 _threshold, address _tokenJar)
-    ExchangeReleaser(_resource, _threshold, _tokenJar, address(this))
+  constructor(address _resource, uint256 _threshold, address _tokenJar, address _feeController)
+    ExchangeReleaser(_resource, _threshold, _tokenJar, address(this), _feeController)
   {}
 
   /// @notice Hook called after assets are released - initiates stage 2 withdrawal to L1

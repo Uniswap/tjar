@@ -6,7 +6,7 @@ import {ExchangeReleaser} from "./ExchangeReleaser.sol";
 /// @title Firepit
 /// @notice An ExchangeReleaser with recipient set to the burn address address(0xdead)
 contract Firepit is ExchangeReleaser {
-  constructor(address _resource, uint256 _threshold, address _tokenJar)
-    ExchangeReleaser(_resource, _threshold, _tokenJar, address(0xdead))
+  constructor(address _resource, uint256 _threshold, address _tokenJar, address _feeController)
+    ExchangeReleaser(_resource, _threshold, _tokenJar, address(0xdead), _feeController)
   {}
 }

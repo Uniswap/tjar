@@ -7,11 +7,12 @@ import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 import {ResourceManager} from "../base/ResourceManager.sol";
 import {Nonce} from "../base/Nonce.sol";
 import {ITokenJar} from "../interfaces/ITokenJar.sol";
+import {IFeeController} from "../interfaces/IFeeController.sol";
 import {IReleaser} from "../interfaces/IReleaser.sol";
 
 /// @title ExchangeReleaser
 /// @notice A contract that releases assets from the TokenJar in exchange for transferring a
-/// threshold amount of a resource token
+/// threshold amount of a resource token, plus an optional protocol fee on top
 /// @dev Inherits from ResourceManager for resource transferring functionality and Nonce for replay
 /// protection
 /// @dev Note there are some MEV and efficiency considerations around the release length and
@@ -27,27 +28,48 @@ abstract contract ExchangeReleaser is IReleaser, ResourceManager, Nonce {
   /// @notice Maximum number of different assets that can be released in a single call
   uint256 public constant MAX_RELEASE_LENGTH = 20;
 
+  /// @notice Denominator for protocol fee basis points
+  uint256 public constant BPS_DENOMINATOR = 10_000;
+
   /// @inheritdoc IReleaser
   ITokenJar public immutable TOKEN_JAR;
+
+  /// @inheritdoc IReleaser
+  IFeeController public immutable FEE_CONTROLLER;
 
   /// @notice Creates a new ExchangeReleaser instance
   /// @param _resource The address of the resource token that must be transferred
   /// @param _threshold The minimum amount of resource tokens that must be transferred
   /// @param _tokenJar The address of the TokenJar contract holding the assets
   /// @param _recipient The address that will receive the resource tokens
-  constructor(address _resource, uint256 _threshold, address _tokenJar, address _recipient)
-    ResourceManager(_resource, _threshold, msg.sender, _recipient)
-  {
+  /// @param _feeController The address of the singleton protocol fee controller
+  constructor(
+    address _resource,
+    uint256 _threshold,
+    address _tokenJar,
+    address _recipient,
+    address _feeController
+  ) ResourceManager(_resource, _threshold, msg.sender, _recipient) {
+    require(_feeController != address(0), InvalidFeeController());
     TOKEN_JAR = ITokenJar(payable(_tokenJar));
+    FEE_CONTROLLER = IFeeController(_feeController);
   }
 
   /// @inheritdoc IReleaser
+  /// @dev The caller pays `threshold` to the resource recipient, plus a protocol fee of
+  /// `threshold * feeBps / BPS_DENOMINATOR` to the protocol fee recipient. The fee transfer is
+  /// skipped entirely when the fee rounds to zero
   function release(uint256 _nonce, Currency[] calldata assets, address recipient)
     external
     handleNonce(_nonce)
   {
     require(assets.length <= MAX_RELEASE_LENGTH, TooManyAssets());
     RESOURCE.safeTransferFrom(msg.sender, RESOURCE_RECIPIENT, threshold);
+
+    (uint256 feeBps, address feeRecipient) = FEE_CONTROLLER.feeConfig();
+    uint256 fee = threshold * feeBps / BPS_DENOMINATOR;
+    if (fee > 0) RESOURCE.safeTransferFrom(msg.sender, feeRecipient, fee);
+
     TOKEN_JAR.release(assets, recipient);
     emit Released(_nonce, recipient, assets);
 
