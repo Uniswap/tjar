@@ -15,7 +15,7 @@ contract FeeController is Owned, IFeeController {
   /// @inheritdoc IFeeController
   /// @dev Hard ceiling on the protocol fee (10%). The fee is charged on top of the partner's
   ///      threshold; this caps owner mis-configuration. Compile-time constant, not adjustable.
-  uint256 public constant MAX_FEE_BPS = 1_000;
+  uint256 public constant MAX_FEE_BPS = 1000;
 
   /// @inheritdoc IFeeController
   uint256 public feeBps;

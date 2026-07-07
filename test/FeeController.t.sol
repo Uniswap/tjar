@@ -34,14 +34,14 @@ contract FeeControllerTest is Test {
     assertEq(fresh.owner(), owner); // deployer is initial owner
     assertEq(fresh.feeRecipient(), address(0)); // recipient unset until configured
     assertEq(fresh.feeBps(), 0); // starts at 0 bps
-    assertEq(fresh.MAX_FEE_BPS(), 1_000);
+    assertEq(fresh.MAX_FEE_BPS(), 1000);
   }
 
   function test_constructor_initialState() public view {
     assertEq(feeController.owner(), owner);
     assertEq(feeController.feeRecipient(), feeRecipient);
     assertEq(feeController.feeBps(), 0); // starts at 0 bps
-    assertEq(feeController.MAX_FEE_BPS(), 1_000);
+    assertEq(feeController.MAX_FEE_BPS(), 1000);
   }
 
   /*//////////////////////////////////////////////////////////////
