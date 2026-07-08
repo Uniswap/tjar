@@ -9,13 +9,13 @@
 
 ## Overview
 
-The **Token Jar + Releaser** pattern is a reusable primitive: an immutable contract (the **Token Jar**) that accumulates arbitrary assets from any number of fee sources, and a **Releaser** that lets anyone atomically redeem those accumulated assets in exchange for a designated *revenue token* (the `RESOURCE`).
+The **Token Jar + Releaser** pattern is a reusable primitive: an immutable contract (the **Token Jar**) that accumulates arbitrary assets from any number of fee sources, and a **Releaser** that lets anyone atomically redeem those accumulated assets in exchange for a designated *revenue token* (the `resource`).
 
 While it originated as Uniswap's protocol-fee mechanism (accumulate fees → redeem for UNI → burn the UNI), the pattern is broadly useful beyond Uniswap. Any system that collects fees in heterogeneous assets and wants to convert them into a single token — whether to burn it, distribute it, or route it to a treasury — can use this infrastructure unchanged. The Token Jar is agnostic about where assets come from; the Releaser is agnostic about what the revenue token is or what happens to it.
 
 ```
-Fee Sources → Token Jar → Releaser → (redeemer pays RESOURCE) → RESOURCE_RECIPIENT
-                                                  └→ optional protocol fee → FeeController.feeRecipient
+Fee Sources → Token Jar → Releaser → (redeemer pays resource) → resourceRecipient
+                                                 └→ optional protocol fee → FeeController.feeRecipient
 ```
 
 ## Architecture
@@ -32,7 +32,9 @@ Fee Sources → Token Jar → Releaser → (redeemer pays RESOURCE) → RESOURCE
 
 Releasers serve as the Token Jar's `releaser` and implement the redemption logic:
 
-- [`ExchangeReleaser.sol`](src/releasers/ExchangeReleaser.sol) — abstract base. A redeemer pays a fixed `threshold` amount of the `RESOURCE` token and, in exchange, the Token Jar's accumulated assets are released to a recipient they specify. The collected `RESOURCE` is forwarded to the `RESOURCE_RECIPIENT` configured at deployment. Sequential nonces (see [`Nonce.sol`](src/base/Nonce.sol)) prevent front-running and enforce deterministic ordering.
+- [`ExchangeReleaser.sol`](src/releasers/ExchangeReleaser.sol) — the concrete, deployable releaser. A redeemer pays a fixed `threshold` amount of the `resource` token and, in exchange, the Token Jar's accumulated assets are released to a recipient they specify. The collected `resource` is forwarded to the `resourceRecipient`. Sequential nonces (see [`Nonce.sol`](src/base/Nonce.sol)) prevent front-running and enforce deterministic ordering. An `_afterRelease` hook stays virtual as the extension point for specialized variants (e.g. bridged-resource burners).
+
+The release configuration — `resource`, `resourceRecipient`, `threshold`, `maxReleaseLength` — is mutable, but only **atomically**, through a single `setConfig` call. There are deliberately no per-field setters: `threshold` is denominated *in* `resource`, so sequential single-field updates would pass through intermediate configs that are validly releasable at their own nonce (e.g. a WETH threshold briefly expressed in USDC units). `setConfig` is callable by the owner or an appointed `configSetter`, and **every call bumps the release nonce** — a pending release priced against old terms reverts instead of executing against terms the caller never saw. Rotating the `configSetter` itself does not bump; it changes who may set terms, not the terms.
 
 #### Burn configurations (what happened to Firepit)
 
@@ -40,7 +42,7 @@ Upstream `protocol-fees` ships **Firepit** releasers that burn the `RESOURCE` by
 
 To replicate a Firepit in TJAR, pick the guarantee level you actually need:
 
-1. **Burn economics** — deploy the Releaser with `RESOURCE_RECIPIENT = 0xdead`. Every release burns the revenue token, but the owner retains control.
+1. **Burn economics** — deploy the Releaser with `resourceRecipient = 0xdead`. Every release burns the revenue token, but the owner retains control.
 2. **Trust-minimized burn** — additionally place ownership of the Jar and the Releaser behind a timelock or governance, so any change of terms is slow and publicly visible.
 3. **Trustless burn** — relinquish control entirely: revoke the setter role (set it to `address(0)`) and transfer ownership of **both** the Releaser and the Token Jar to `address(0)` (solmate `Owned` permits this). Nothing — recipient, threshold, or the jar↔releaser wiring — can ever change again. The trade-off is a frozen `threshold`: if the revenue token's price drifts far enough, releases become over- or under-priced forever, with no way to retune.
 4. **Exactly upstream semantics** (immutable burn recipient with a governance-tunable threshold) — deploy the audited Firepit from [Uniswap/protocol-fees](https://github.com/Uniswap/protocol-fees) itself. TJAR intentionally doesn't maintain a parallel copy.
@@ -70,11 +72,26 @@ The per-chain ceremony, all in one script run:
 
 Deploy order per chain is **FeeController → Factory → partner deployments**, since factory-deployed releasers call `feeConfig()` on every release. The window before governance handoff is low-risk by construction: the fee starts at 0 bps, is hard-capped at `MAX_FEE_BPS`, and cannot be non-zero until a recipient is set. One caution: `Owned.transferOwnership` is single-step, so verify each L2's governance executor address before sending — a transfer to the wrong alias is unrecoverable.
 
+### Factory
+
+[`Factory.sol`](src/Factory.sol) deploys partner TokenJar + ExchangeReleaser pairs and hands all authority to the partner:
+
+```solidity
+factory.deploy(revenueToken, revenueRecipient, threshold, admin, salt) → (jar, releaser)
+```
+
+In a single transaction the Factory CREATE2-deploys the jar and the releaser (wired to the jar address, the initial config, and the FeeController), sets the releaser on the jar, and transfers everything to `admin`: jar ownership, the `configSetter` role, and releaser ownership. It emits `JarDeployed` (the initial config is covered by the releaser's own `ConfigSet` in the same transaction) and keeps **no registry and no residual authority** — the Factory can never touch a deployed pair again.
+
+- **Permissionless** — anyone can deploy; the Factory holds no privileges worth gating.
+- **Sender-scoped salts** — the effective CREATE2 salt is `keccak256(msg.sender, salt)`. The TokenJar takes no constructor args (that is what makes its address chain-invariant), so an unscoped salt would let a griefer front-run a partner's deploy on another chain and squat their predicted jar address with a different admin. Scoping means an address is only reachable by the same deployer with the same salt — deploy from the same address on every chain and the jar lands at the same address everywhere.
+- **Predictable** — `predictJar(deployer, salt)` returns the jar address before anything is deployed, so a partner can wire their fee sources (e.g. a TAPI integration) to it in advance.
+- **Chain-invariant** — the Factory itself deploys through the canonical CREATE2 deployer, and its only constructor arg is the (chain-invariant) FeeController address, so the Factory sits at the same address on every chain.
+
 ### Base & interfaces
 
-- [`ResourceManager.sol`](src/base/ResourceManager.sol) — defines the `RESOURCE` token and the `threshold` amount required per release.
+- [`ResourceManager.sol`](src/base/ResourceManager.sol) — holds the release configuration (`resource`, `resourceRecipient`, `threshold`, `maxReleaseLength`, `configSetter`) and enforces the atomic-`setConfig` + nonce-bump invariants.
 - [`Nonce.sol`](src/base/Nonce.sol) — sequences pending releases to prevent front-running.
-- [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), [`IFeeController`](src/interfaces/IFeeController.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`).
+- [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), [`IFeeController`](src/interfaces/IFeeController.sol), [`IFactory`](src/interfaces/IFactory.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`).
 
 ## Economic Incentives
 
@@ -112,24 +129,27 @@ forge coverage        # coverage report
 ```
 src/
 ├── TokenJar.sol                        // Accumulates fees; only the releaser can withdraw
-├── FeeController.sol                    // Chain-wide singleton holding the optional protocol fee
+├── FeeController.sol                   // Chain-wide singleton holding the optional protocol fee
+├── Factory.sol                         // Deploys jar + releaser pairs; hands all authority to the partner
 ├── base
 │   ├── Nonce.sol                       // Sequences pending releases to prevent front-running
-│   └── ResourceManager.sol             // Defines the RESOURCE token and release threshold
+│   └── ResourceManager.sol             // Atomic release config (setConfig) + nonce-bump invariants
 ├── interfaces
 │   ├── ITokenJar.sol
 │   ├── IReleaser.sol
 │   ├── IFeeController.sol
+│   ├── IFactory.sol
 │   └── base/                           // INonce, IOwned, IResourceManager
 └── releasers
-    └── ExchangeReleaser.sol            // Abstract: exchange RESOURCE for Token Jar assets
+    └── ExchangeReleaser.sol            // Concrete: exchange resource for Token Jar assets
 
 test
 ├── TokenJar.t.sol
 ├── FeeController.t.sol
 ├── ExchangeReleaser.t.sol
+├── Factory.t.sol
 ├── mocks/                              // mock tokens and releasers
-└── utils/                             // shared test base
+└── utils/                              // shared test base
 ```
 
 ## Security
