@@ -9,6 +9,11 @@ interface IResourceManager {
   /// @notice Thrown when an unauthorized address attempts to call a restricted function
   error Unauthorized();
 
+  /// @notice Emitted when the config setter is updated
+  /// @param oldConfigSetter The previous config setter
+  /// @param newConfigSetter The new config setter
+  event ConfigSetterSet(address indexed oldConfigSetter, address indexed newConfigSetter);
+
   /// @notice The resource token required by parent IReleaser
   function RESOURCE() external view returns (ERC20);
 
@@ -18,16 +23,17 @@ interface IResourceManager {
   /// @notice The minimum threshold of `RESOURCE` tokens required to perform a release
   function threshold() external view returns (uint256);
 
-  /// @notice The address authorized to set the `threshold` value
-  function thresholdSetter() external view returns (address);
+  /// @notice The address authorized, alongside the owner, to update the release configuration
+  function configSetter() external view returns (address);
 
-  /// @notice Set the address authorized to set the `threshold` value
-  /// @dev only callable by `owner`
-  function setThresholdSetter(address newThresholdSetter) external;
+  /// @notice Set the address authorized to update the release configuration
+  /// @dev only callable by `owner`; setting `address(0)` revokes the role (the owner can
+  /// always update the config directly)
+  function setConfigSetter(address newConfigSetter) external;
 
   /// @notice Set the minimum threshold of `RESOURCE` tokens required to perform a release
-  /// @dev only callable by `thresholdSetter`
-  /// the `thresholdSetter` should take explicit care when updating the threshold
+  /// @dev only callable by the `configSetter` or the `owner`
+  /// the caller should take explicit care when updating the threshold
   /// * lowering the threshold may create instantaneous value leakage
   /// * front-running a release with an increased threshold may cause economic loss
   /// to the releaser/searcher

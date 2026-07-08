@@ -11,6 +11,7 @@ import {IReleaser} from "../src/interfaces/IReleaser.sol";
 contract ExchangeReleaserTest is ProtocolFeesTestBase {
   ExchangeReleaserMock public swapReleaser;
   address public recipient = makeAddr("RECIPIENT");
+  address public configSetter = makeAddr("CONFIG_SETTER");
 
   function setUp() public override {
     super.setUp();
@@ -21,7 +22,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     );
 
     tokenJar.setReleaser(address(swapReleaser));
-    swapReleaser.setThresholdSetter(owner);
+    swapReleaser.setConfigSetter(configSetter);
     vm.stopPrank();
   }
 
@@ -233,20 +234,64 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     swapReleaser.release(nonce, assets, alice);
   }
 
-  function test_fuzz_setThresholdSetter(address caller, address newSetter) public {
+  function test_fuzz_setConfigSetter(address caller, address newSetter) public {
     vm.startPrank(caller);
+    // only the owner can rotate the role; the configSetter itself cannot
     if (caller != swapReleaser.owner()) vm.expectRevert("UNAUTHORIZED");
-    swapReleaser.setThresholdSetter(newSetter);
+    swapReleaser.setConfigSetter(newSetter);
     vm.stopPrank();
   }
 
   function test_fuzz_revert_setThreshold(address caller, uint256 newThreshold) public {
     vm.startPrank(caller);
-    if (caller != swapReleaser.thresholdSetter()) {
+    if (caller != swapReleaser.configSetter() && caller != swapReleaser.owner()) {
       vm.expectRevert(IResourceManager.Unauthorized.selector);
     }
     swapReleaser.setThreshold(newThreshold);
     vm.stopPrank();
+  }
+
+  function test_setThreshold_asOwner() public {
+    // the owner can set the threshold directly without holding the configSetter role
+    assertTrue(swapReleaser.configSetter() != owner);
+
+    vm.prank(owner);
+    swapReleaser.setThreshold(42);
+    assertEq(swapReleaser.threshold(), 42);
+  }
+
+  function test_setThreshold_asConfigSetter() public {
+    vm.prank(configSetter);
+    swapReleaser.setThreshold(42);
+    assertEq(swapReleaser.threshold(), 42);
+  }
+
+  function test_setConfigSetter_emitsEvent() public {
+    address newSetter = makeAddr("NEW_SETTER");
+
+    vm.expectEmit(true, true, false, true, address(swapReleaser));
+    emit IResourceManager.ConfigSetterSet(configSetter, newSetter);
+
+    vm.prank(owner);
+    swapReleaser.setConfigSetter(newSetter);
+    assertEq(swapReleaser.configSetter(), newSetter);
+  }
+
+  function test_setConfigSetter_revoke() public {
+    // revoking the role locks out the old configSetter but the owner can still act
+    vm.expectEmit(true, true, false, true, address(swapReleaser));
+    emit IResourceManager.ConfigSetterSet(configSetter, address(0));
+
+    vm.prank(owner);
+    swapReleaser.setConfigSetter(address(0));
+
+    vm.prank(configSetter);
+    vm.expectRevert(IResourceManager.Unauthorized.selector);
+    swapReleaser.setThreshold(42);
+
+    vm.prank(owner);
+    swapReleaser.setThreshold(42);
+    assertEq(swapReleaser.threshold(), 42);
   }
 
   function test_fuzz_newThreshold(uint256 newThreshold) public {

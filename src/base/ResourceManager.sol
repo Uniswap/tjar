@@ -13,7 +13,7 @@ abstract contract ResourceManager is IResourceManager, Owned {
   uint256 public threshold;
 
   /// @inheritdoc IResourceManager
-  address public thresholdSetter;
+  address public configSetter;
 
   /// @inheritdoc IResourceManager
   ERC20 public immutable RESOURCE;
@@ -21,13 +21,14 @@ abstract contract ResourceManager is IResourceManager, Owned {
   /// @inheritdoc IResourceManager
   address public immutable RESOURCE_RECIPIENT;
 
-  /// @notice Ensures only the threshold setter can call the setThreshold function
-  modifier onlyThresholdSetter() {
-    require(msg.sender == thresholdSetter, Unauthorized());
+  /// @notice Ensures only the config setter or the owner can update the release configuration
+  modifier onlyConfigSetterOrOwner() {
+    require(msg.sender == configSetter || msg.sender == owner, Unauthorized());
     _;
   }
 
-  /// @dev At construction the thresholdSetter defaults to 0 and its on the owner to set.
+  /// @dev At construction the configSetter defaults to 0. The owner can update the config
+  /// directly at any time and may appoint a configSetter to delegate that ability.
   constructor(address _resource, uint256 _threshold, address _owner, address _recipient)
     Owned(_owner)
   {
@@ -37,12 +38,13 @@ abstract contract ResourceManager is IResourceManager, Owned {
   }
 
   /// @inheritdoc IResourceManager
-  function setThresholdSetter(address _thresholdSetter) external onlyOwner {
-    thresholdSetter = _thresholdSetter;
+  function setConfigSetter(address _configSetter) external onlyOwner {
+    emit ConfigSetterSet(configSetter, _configSetter);
+    configSetter = _configSetter;
   }
 
   /// @inheritdoc IResourceManager
-  function setThreshold(uint256 _threshold) external onlyThresholdSetter {
+  function setThreshold(uint256 _threshold) external onlyConfigSetterOrOwner {
     threshold = _threshold;
   }
 }
