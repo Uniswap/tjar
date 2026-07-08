@@ -21,7 +21,7 @@ import {IReleaser} from "../interfaces/IReleaser.sol";
 /// TokenJar can also cause the exchange to be extra profitable for the release caller. Future
 /// versions may consider dynamic thresholds or other MEV minimizing auction techniques
 /// @custom:security-contact security@uniswap.org
-abstract contract ExchangeReleaser is IReleaser, ResourceManager {
+contract ExchangeReleaser is IReleaser, ResourceManager {
   using SafeTransferLib for ERC20;
 
   /// @notice Denominator for protocol fee basis points
@@ -75,6 +75,8 @@ abstract contract ExchangeReleaser is IReleaser, ResourceManager {
 
   /// @notice Internal function to handle any post transfer actions
   /// e.g. bridge calls or notifications
+  /// @dev Deliberately kept as a virtual no-op: the extension point for specialized variants
+  /// (e.g. a bridged-resource burner) to subclass this concrete contract
   function _afterRelease(Currency[] calldata assets, address recipient) internal virtual {
     // by default do nothing after release
   }
