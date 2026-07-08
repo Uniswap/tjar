@@ -11,6 +11,9 @@ interface IReleaser is IResourceManager, INonce {
   /// @notice Thrown when attempting to release too many assets at once
   error TooManyAssets();
 
+  /// @notice Thrown when constructing with a zero-address token jar
+  error InvalidTokenJar();
+
   /// @notice Thrown when constructing with a zero-address fee controller
   error InvalidFeeController();
 

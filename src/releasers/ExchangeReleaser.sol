@@ -5,7 +5,6 @@ import {Currency} from "v4-core/types/Currency.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 import {ResourceManager} from "../base/ResourceManager.sol";
-import {Nonce} from "../base/Nonce.sol";
 import {ITokenJar} from "../interfaces/ITokenJar.sol";
 import {IFeeController} from "../interfaces/IFeeController.sol";
 import {IReleaser} from "../interfaces/IReleaser.sol";
@@ -13,8 +12,8 @@ import {IReleaser} from "../interfaces/IReleaser.sol";
 /// @title ExchangeReleaser
 /// @notice A contract that releases assets from the TokenJar in exchange for transferring a
 /// threshold amount of a resource token, plus an optional protocol fee on top
-/// @dev Inherits from ResourceManager for resource transferring functionality and Nonce for replay
-/// protection
+/// @dev Inherits from ResourceManager for resource transferring functionality and (through it)
+/// Nonce for replay protection
 /// @dev Note there are some MEV and efficiency considerations around the release length and
 /// threshold. If many assets are collected in the token jar, some may never reach a value high
 /// enough to be released. Larger release lengths can mitigate this at the cost of higher gas and
@@ -22,11 +21,8 @@ import {IReleaser} from "../interfaces/IReleaser.sol";
 /// TokenJar can also cause the exchange to be extra profitable for the release caller. Future
 /// versions may consider dynamic thresholds or other MEV minimizing auction techniques
 /// @custom:security-contact security@uniswap.org
-abstract contract ExchangeReleaser is IReleaser, ResourceManager, Nonce {
+abstract contract ExchangeReleaser is IReleaser, ResourceManager {
   using SafeTransferLib for ERC20;
-
-  /// @notice Maximum number of different assets that can be released in a single call
-  uint256 public constant MAX_RELEASE_LENGTH = 20;
 
   /// @notice Denominator for protocol fee basis points
   uint256 public constant BPS_DENOMINATOR = 10_000;
@@ -50,6 +46,7 @@ abstract contract ExchangeReleaser is IReleaser, ResourceManager, Nonce {
     address _recipient,
     address _feeController
   ) ResourceManager(_resource, _threshold, msg.sender, _recipient) {
+    require(_tokenJar != address(0), InvalidTokenJar());
     require(_feeController != address(0), InvalidFeeController());
     TOKEN_JAR = ITokenJar(payable(_tokenJar));
     FEE_CONTROLLER = IFeeController(_feeController);
@@ -63,12 +60,12 @@ abstract contract ExchangeReleaser is IReleaser, ResourceManager, Nonce {
     external
     handleNonce(_nonce)
   {
-    require(assets.length <= MAX_RELEASE_LENGTH, TooManyAssets());
-    RESOURCE.safeTransferFrom(msg.sender, RESOURCE_RECIPIENT, threshold);
+    require(assets.length <= maxReleaseLength, TooManyAssets());
+    resource.safeTransferFrom(msg.sender, resourceRecipient, threshold);
 
     (uint256 feeBps, address feeRecipient) = FEE_CONTROLLER.feeConfig();
     uint256 fee = threshold * feeBps / BPS_DENOMINATOR;
-    if (fee > 0) RESOURCE.safeTransferFrom(msg.sender, feeRecipient, fee);
+    if (fee > 0) resource.safeTransferFrom(msg.sender, feeRecipient, fee);
 
     TOKEN_JAR.release(assets, recipient);
     emit Released(_nonce, recipient, assets);

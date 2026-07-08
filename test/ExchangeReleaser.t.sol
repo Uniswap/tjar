@@ -242,27 +242,223 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.stopPrank();
   }
 
-  function test_fuzz_revert_setThreshold(address caller, uint256 newThreshold) public {
+  function test_fuzz_revert_setConfig(address caller, uint256 newThreshold) public {
     vm.startPrank(caller);
     if (caller != swapReleaser.configSetter() && caller != swapReleaser.owner()) {
       vm.expectRevert(IResourceManager.Unauthorized.selector);
     }
-    swapReleaser.setThreshold(newThreshold);
+    swapReleaser.setConfig(address(resource), recipient, newThreshold, 20);
     vm.stopPrank();
   }
 
-  function test_setThreshold_asOwner() public {
-    // the owner can set the threshold directly without holding the configSetter role
-    assertTrue(swapReleaser.configSetter() != owner);
+  /// @dev sets only the threshold, keeping the fixture's other config values
+  function _setThresholdConfig(address caller, uint256 newThreshold) internal {
+    vm.prank(caller);
+    swapReleaser.setConfig(address(resource), recipient, newThreshold, 20);
+  }
+
+  function test_setConfig_bumpsNonce() public {
+    uint256 nonceBefore = swapReleaser.nonce();
+
+    vm.expectEmit(true, true, false, true, address(swapReleaser));
+    emit IResourceManager.ConfigSet(address(resource), recipient, 42, 20);
+
+    _setThresholdConfig(configSetter, 42);
+
+    assertEq(swapReleaser.threshold(), 42);
+    assertEq(swapReleaser.nonce(), nonceBefore + 1);
+  }
+
+  /// @dev "any config txn bumps" is the invariant — a same-value set is not exempt
+  function test_setConfig_noopStillBumpsNonce() public {
+    uint256 nonceBefore = swapReleaser.nonce();
+    uint256 currentThreshold = swapReleaser.threshold();
+
+    _setThresholdConfig(configSetter, currentThreshold);
+
+    assertEq(swapReleaser.threshold(), currentThreshold);
+    assertEq(swapReleaser.nonce(), nonceBefore + 1);
+  }
+
+  function test_constructor_initialConfig() public view {
+    assertEq(address(swapReleaser.resource()), address(resource));
+    assertEq(swapReleaser.resourceRecipient(), recipient);
+    assertEq(swapReleaser.threshold(), INITIAL_TOKEN_AMOUNT);
+    assertEq(swapReleaser.maxReleaseLength(), 20);
+    assertEq(swapReleaser.configSetter(), configSetter);
+    assertEq(swapReleaser.nonce(), 0); // the constructor does not bump
+  }
+
+  function test_revert_constructor_validation() public {
+    vm.expectRevert(IResourceManager.InvalidResource.selector);
+    new ExchangeReleaserMock(
+      address(0), INITIAL_TOKEN_AMOUNT, address(tokenJar), recipient, address(feeController)
+    );
+
+    vm.expectRevert(IResourceManager.InvalidResourceRecipient.selector);
+    new ExchangeReleaserMock(
+      address(resource), INITIAL_TOKEN_AMOUNT, address(tokenJar), address(0), address(feeController)
+    );
+
+    vm.expectRevert(IReleaser.InvalidTokenJar.selector);
+    new ExchangeReleaserMock(
+      address(resource), INITIAL_TOKEN_AMOUNT, address(0), recipient, address(feeController)
+    );
+  }
+
+  function test_revert_setConfig_validation() public {
+    vm.startPrank(configSetter);
+
+    vm.expectRevert(IResourceManager.InvalidResource.selector);
+    swapReleaser.setConfig(address(0), recipient, 42, 20);
+
+    vm.expectRevert(IResourceManager.InvalidResourceRecipient.selector);
+    swapReleaser.setConfig(address(resource), address(0), 42, 20);
+
+    vm.expectRevert(IResourceManager.InvalidMaxReleaseLength.selector);
+    swapReleaser.setConfig(address(resource), recipient, 42, 0);
+
+    vm.stopPrank();
+  }
+
+  /// @dev the headline regression for atomic config: a resource switch cannot let a pending
+  /// release pull a token the caller merely happened to have approved
+  function test_revert_release_resourceSwitchFrontrun() public {
+    uint256 pendingNonce = swapReleaser.nonce();
+    uint256 newThreshold = 5e18;
+
+    // alice prepares a release of the current resource, and also happens to have approved
+    // mockToken1 (the future resource)
+    mockToken1.mint(alice, INITIAL_TOKEN_AMOUNT);
+    vm.startPrank(alice);
+    resource.approve(address(swapReleaser), type(uint256).max);
+    mockToken1.approve(address(swapReleaser), type(uint256).max);
+    vm.stopPrank();
+
+    // the partner atomically switches resource AND threshold before alice's release lands
+    vm.prank(configSetter);
+    swapReleaser.setConfig(address(mockToken1), recipient, newThreshold, 20);
+
+    // alice's pending release reverts on the nonce; neither token is pulled
+    vm.prank(alice);
+    vm.expectRevert(INonce.InvalidNonce.selector);
+    swapReleaser.release(pendingNonce, releaseMockToken, alice);
+    assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
+    assertEq(mockToken1.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
+
+    // re-simulated at the current nonce, the release pulls the NEW resource at the NEW threshold
+    uint256 currentNonce = swapReleaser.nonce();
+    vm.prank(alice);
+    swapReleaser.release(currentNonce, releaseMockToken, alice);
+
+    assertEq(mockToken1.balanceOf(alice), INITIAL_TOKEN_AMOUNT - newThreshold);
+    assertEq(mockToken1.balanceOf(recipient), newThreshold);
+    assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT); // old resource untouched
+  }
+
+  /// @dev the protocol fee is denominated in whatever resource currently is
+  function test_release_feeInNewResource() public {
+    uint256 feeBps = 500;
+    uint256 newThreshold = 100e18;
+    uint256 fee = newThreshold * feeBps / swapReleaser.BPS_DENOMINATOR();
 
     vm.prank(owner);
-    swapReleaser.setThreshold(42);
+    feeController.setFeeBps(feeBps);
+
+    vm.prank(configSetter);
+    swapReleaser.setConfig(address(mockToken1), recipient, newThreshold, 20);
+
+    mockToken1.mint(alice, newThreshold + fee);
+    uint256 currentNonce = swapReleaser.nonce();
+
+    vm.startPrank(alice);
+    mockToken1.approve(address(swapReleaser), type(uint256).max);
+    swapReleaser.release(currentNonce, releaseMockToken, alice);
+    vm.stopPrank();
+
+    assertEq(mockToken1.balanceOf(recipient), newThreshold);
+    assertEq(mockToken1.balanceOf(protocolFeeRecipient), fee);
+    assertEq(mockToken1.balanceOf(alice), 0);
+  }
+
+  /// @dev maxReleaseLength governs the TooManyAssets boundary in both directions
+  function test_setConfig_maxReleaseLengthBoundary() public {
+    Currency[] memory assets = new Currency[](3);
+    for (uint256 i = 0; i < 3; i++) {
+      assets[i] = Currency.wrap(address(mockToken));
+    }
+
+    // lower the cap below the batch size: release reverts
+    vm.prank(configSetter);
+    swapReleaser.setConfig(address(resource), recipient, INITIAL_TOKEN_AMOUNT, 2);
+
+    vm.startPrank(alice);
+    resource.approve(address(swapReleaser), type(uint256).max);
+    uint256 nonce = swapReleaser.nonce();
+    vm.expectRevert(IReleaser.TooManyAssets.selector);
+    swapReleaser.release(nonce, assets, alice);
+    vm.stopPrank();
+
+    // raise the cap back above it: the same batch releases
+    vm.prank(configSetter);
+    swapReleaser.setConfig(address(resource), recipient, INITIAL_TOKEN_AMOUNT, 3);
+
+    uint256 freshNonce = swapReleaser.nonce();
+    vm.prank(alice);
+    swapReleaser.release(freshNonce, assets, alice);
+    assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
+  }
+
+  /// @dev rotating the configSetter changes who may set terms, not the terms a searcher
+  /// priced against — it must NOT invalidate pending releases
+  function test_setConfigSetter_doesNotBumpNonce() public {
+    uint256 nonceBefore = swapReleaser.nonce();
+
+    vm.prank(owner);
+    swapReleaser.setConfigSetter(makeAddr("ANOTHER_SETTER"));
+
+    assertEq(swapReleaser.nonce(), nonceBefore);
+  }
+
+  /// @dev the headline safety property: a config change landing before a pending release
+  /// makes the release revert instead of executing at terms the caller never priced
+  function test_revert_release_configChangeFrontrun() public {
+    uint256 pendingNonce = swapReleaser.nonce();
+
+    vm.prank(alice);
+    resource.approve(address(swapReleaser), type(uint256).max);
+
+    // a threshold increase front-runs alice's pending release
+    _setThresholdConfig(configSetter, INITIAL_TOKEN_AMOUNT * 2);
+
+    // the release simulated against the old terms reverts on the nonce
+    vm.prank(alice);
+    vm.expectRevert(INonce.InvalidNonce.selector);
+    swapReleaser.release(pendingNonce, releaseMockToken, alice);
+    assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT); // nothing was pulled
+
+    // re-simulating at the current nonce executes at the new terms
+    deal(address(resource), alice, INITIAL_TOKEN_AMOUNT * 2);
+    uint256 currentNonce = swapReleaser.nonce();
+
+    vm.prank(alice);
+    swapReleaser.release(currentNonce, releaseMockToken, alice);
+
+    assertEq(resource.balanceOf(alice), 0);
+    assertEq(resource.balanceOf(recipient), INITIAL_TOKEN_AMOUNT * 2);
+    assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
+  }
+
+  function test_setConfig_asOwner() public {
+    // the owner can set the config directly without holding the configSetter role
+    assertTrue(swapReleaser.configSetter() != owner);
+
+    _setThresholdConfig(owner, 42);
     assertEq(swapReleaser.threshold(), 42);
   }
 
-  function test_setThreshold_asConfigSetter() public {
-    vm.prank(configSetter);
-    swapReleaser.setThreshold(42);
+  function test_setConfig_asConfigSetter() public {
+    _setThresholdConfig(configSetter, 42);
     assertEq(swapReleaser.threshold(), 42);
   }
 
@@ -287,18 +483,16 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.prank(configSetter);
     vm.expectRevert(IResourceManager.Unauthorized.selector);
-    swapReleaser.setThreshold(42);
+    swapReleaser.setConfig(address(resource), recipient, 42, 20);
 
-    vm.prank(owner);
-    swapReleaser.setThreshold(42);
+    _setThresholdConfig(owner, 42);
     assertEq(swapReleaser.threshold(), 42);
   }
 
   function test_fuzz_newThreshold(uint256 newThreshold) public {
     vm.assume(newThreshold != swapReleaser.threshold());
 
-    vm.prank(owner);
-    swapReleaser.setThreshold(newThreshold);
+    _setThresholdConfig(owner, newThreshold);
 
     deal(address(resource), alice, newThreshold);
 
