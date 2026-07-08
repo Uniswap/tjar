@@ -52,9 +52,23 @@ To replicate a Firepit in TJAR, pick the guarantee level you actually need:
 - **On top of the threshold** — `threshold` stays the partner's net amount; the fee is `threshold * feeBps / 10_000`, paid by the redeemer in the current `RESOURCE`. It starts at **0 bps**, so there is no fee by default.
 - **Capped** — `feeBps` can never exceed `MAX_FEE_BPS` (1000 bps = 10%), a compile-time constant.
 - **Atomic read** — `feeConfig()` returns `(feeBps, feeRecipient)` in a single call, so redeemers and Releasers always price against consistent state.
-- **Governance-owned** — the owner is intended to be the **Uniswap governance address**; only it can change the fee or recipient. Partners cannot zero it out.
+- **Governance-owned** — the owner is intended to be the **Uniswap governance address**; only it can change the fee or recipient. Partners cannot zero it out within a factory-deployed Releaser. (Known limitation: a partner can rotate their jar to a custom releaser that skips the fee entirely — enforced at the business layer, not on-chain.)
 - **Fee recipient** — intended to be the **Uniswap Token Jar address**, so protocol fees accumulate alongside Uniswap's own fees and are redeemed through Uniswap's own Releaser. A non-zero fee cannot be enabled until a recipient is set.
-- **Deterministic** — deployed once per chain at the same address via CREATE2 (no constructor args); the owner and recipient are configured post-deploy.
+- **Deterministic** — deployed once per chain at the same address via CREATE2; its only constructor arg (the initial owner) is passed identically on every chain, keeping the initcode — and therefore the address — chain-invariant.
+
+#### Cross-chain deployment & ownership
+
+The rule that governs everything here: whatever is in **initcode** must be byte-identical on every chain (that is what fixes a CREATE2 address), while anything in **storage** is free to differ per chain.
+
+The FeeController is deployed on each chain through the canonical CREATE2 deployer (`0x4e59b44847b379578588920cA78FbF26c0B4956C`) with the same salt and the same `_owner` argument. The owner is an explicit constructor arg because `msg.sender` inside the constructor would be the deployer proxy itself, which can never call the setters — deploying with `Owned(msg.sender)` through this path would brick the contract. The `_owner` must be an address controlled on every chain: an EOA (automatic), or a deterministically deployed Safe.
+
+The per-chain ceremony, all in one script run:
+
+1. **Deploy** `FeeController(opsOwner)` — lands at the same address on every chain
+2. **Configure** — `setFeeRecipient(uniswapTokenJar)`; the recipient is itself deterministically deployed, so this value is also chain-invariant
+3. **Hand off** — `transferOwnership(<this chain's governance executor>)`: the Timelock on mainnet, the bridge executor Uniswap governance acts through on each L2. These differ per chain, which is fine — ownership is storage, not initcode.
+
+Deploy order per chain is **FeeController → Factory → partner deployments**, since factory-deployed releasers call `feeConfig()` on every release. The window before governance handoff is low-risk by construction: the fee starts at 0 bps, is hard-capped at `MAX_FEE_BPS`, and cannot be non-zero until a recipient is set. One caution: `Owned.transferOwnership` is single-step, so verify each L2's governance executor address before sending — a transfer to the wrong alias is unrecoverable.
 
 ### Base & interfaces
 
