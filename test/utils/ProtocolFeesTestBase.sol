@@ -64,7 +64,7 @@ contract ProtocolFeesTestBase is Test {
     vm.startPrank(owner);
     tokenJar = new TokenJar();
     // Protocol fee starts at 0 bps; tests that exercise the fee opt in via setFeeBps
-    feeController = new FeeController();
+    feeController = new FeeController(owner);
     feeController.setFeeRecipient(protocolFeeRecipient);
 
     revertingToken.setRevertFrom(address(tokenJar), true);

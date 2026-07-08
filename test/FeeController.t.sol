@@ -16,25 +16,31 @@ contract FeeControllerTest is Test {
     feeRecipient = makeAddr("feeRecipient");
     unauthorizedUser = makeAddr("unauthorizedUser");
 
-    // Deployer is the initial owner; the chain-specific recipient is set post-deploy.
-    vm.startPrank(owner);
-    feeController = new FeeController();
+    // The initial owner is a constructor arg (msg.sender would be the CREATE2 deployer proxy
+    // in production); the recipient is set post-deploy.
+    feeController = new FeeController(owner);
+    vm.prank(owner);
     feeController.setFeeRecipient(feeRecipient);
-    vm.stopPrank();
   }
 
   /*//////////////////////////////////////////////////////////////
                             CONSTRUCTION
   //////////////////////////////////////////////////////////////*/
 
-  function test_constructor_deployerIsOwner_unconfigured() public {
-    vm.prank(owner);
-    FeeController fresh = new FeeController();
+  function test_constructor_ownerArg_unconfigured() public {
+    // the owner comes from the constructor arg, NOT msg.sender (which would be the CREATE2
+    // deployer proxy in production)
+    FeeController fresh = new FeeController(owner);
 
-    assertEq(fresh.owner(), owner); // deployer is initial owner
+    assertEq(fresh.owner(), owner);
     assertEq(fresh.feeRecipient(), address(0)); // recipient unset until configured
     assertEq(fresh.feeBps(), 0); // starts at 0 bps
     assertEq(fresh.MAX_FEE_BPS(), 1000);
+  }
+
+  function test_revert_constructor_zeroOwner() public {
+    vm.expectRevert(IFeeController.InvalidOwner.selector);
+    new FeeController(address(0));
   }
 
   function test_constructor_initialState() public view {
@@ -84,8 +90,7 @@ contract FeeControllerTest is Test {
 
   function test_setFeeBps_RevertsWhenRecipientUnset() public {
     // Fresh controller with no recipient configured yet
-    vm.prank(owner);
-    FeeController fresh = new FeeController();
+    FeeController fresh = new FeeController(owner);
 
     // Enabling a non-zero fee with no recipient reverts
     vm.prank(owner);

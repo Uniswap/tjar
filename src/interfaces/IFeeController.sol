@@ -11,6 +11,9 @@ interface IFeeController {
   /// @notice Thrown when attempting to set the fee recipient to the zero address
   error InvalidFeeRecipient();
 
+  /// @notice Thrown when constructing with a zero-address owner
+  error InvalidOwner();
+
   /// @notice Emitted when the fee bps is updated
   /// @param oldFeeBps The previous fee in basis points
   /// @param newFeeBps The new fee in basis points

@@ -23,11 +23,18 @@ contract FeeController is Owned, IFeeController {
   /// @inheritdoc IFeeController
   address public feeRecipient;
 
-  /// @dev Takes no chain-specific constructor args so the initcode — and therefore the deployed
-  ///      address — is identical across chains. The deployer is the initial owner and SHOULD set
-  ///      the fee recipient and transfer ownership during deployment. The fee starts at 0 bps and
-  ///      the recipient at address(0); a non-zero fee cannot be enabled until a recipient is set.
-  constructor() Owned(msg.sender) {}
+  /// @dev Deployed via the canonical CREATE2 deployer, where msg.sender inside the constructor
+  ///      is the deployer proxy — hence the explicit `_owner` arg. Pass the SAME owner on every
+  ///      chain: the arg is part of the initcode, and chain-invariant initcode is what keeps the
+  ///      deployed address identical across chains. `_owner` is the initial operational owner;
+  ///      it SHOULD set the fee recipient (the chain-invariant Uniswap Token Jar) and transfer
+  ///      ownership to the chain's governance executor during deployment — governance addresses
+  ///      differ per chain, which is fine because ownership is storage, not initcode. The fee
+  ///      starts at 0 bps and the recipient at address(0); a non-zero fee cannot be enabled
+  ///      until a recipient is set.
+  constructor(address _owner) Owned(_owner) {
+    require(_owner != address(0), InvalidOwner());
+  }
 
   /// @inheritdoc IFeeController
   function feeConfig() external view returns (uint256 bps, address recipient) {
