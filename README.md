@@ -44,7 +44,7 @@ To replicate a Firepit in TJAR, pick the guarantee level you actually need:
 
 1. **Burn economics** — deploy the Releaser with `resourceRecipient = 0xdead`. Every release burns the revenue token, but the owner retains control.
 2. **Trust-minimized burn** — additionally place ownership of the Jar and the Releaser behind a timelock or governance, so any change of terms is slow and publicly visible.
-3. **Trustless burn** — relinquish control entirely: revoke the setter role (set it to `address(0)`) and transfer ownership of **both** the Releaser and the Token Jar to `address(0)` (solmate `Owned` permits this). Nothing — recipient, threshold, or the jar↔releaser wiring — can ever change again. The trade-off is a frozen `threshold`: if the revenue token's price drifts far enough, releases become over- or under-priced forever, with no way to retune.
+3. **Trustless burn** — relinquish control entirely, deployable **atomically in one transaction**: `factory.deploy(..., owner: 0xdead, configSetter: address(0), ...)`. No key ever holds power over the pair, and nothing — recipient, threshold, or the jar↔releaser wiring — can ever change. The trade-off is a frozen `threshold`: if the revenue token's price drifts far enough, releases become over- or under-priced forever, with no way to retune. (An intermediate variant: `owner = 0xdead` with a live `configSetter` freezes the roles and wiring but keeps terms tunable by that fixed address.)
 4. **Exactly upstream semantics** (immutable burn recipient with a governance-tunable threshold) — deploy the audited Firepit from [Uniswap/protocol-fees](https://github.com/Uniswap/protocol-fees) itself. TJAR intentionally doesn't maintain a parallel copy.
 
 ### Protocol Fee
@@ -77,15 +77,26 @@ Deploy order per chain is **FeeController → Factory → partner deployments**,
 [`Factory.sol`](src/Factory.sol) deploys partner TokenJar + ExchangeReleaser pairs and hands all authority to the partner:
 
 ```solidity
-factory.deploy(revenueToken, revenueRecipient, threshold, admin, salt) → (jar, releaser)
+factory.deploy(revenueToken, revenueRecipient, threshold, owner, configSetter, salt) → (jar, releaser)
 ```
 
-In a single transaction the Factory CREATE2-deploys the jar and the releaser (wired to the jar address, the initial config, and the FeeController), sets the releaser on the jar, and transfers everything to `admin`: jar ownership, the `configSetter` role, and releaser ownership. It emits `JarDeployed` (the initial config is covered by the releaser's own `ConfigSet` in the same transaction) and keeps **no registry and no residual authority** — the Factory can never touch a deployed pair again.
+In a single transaction the Factory CREATE2-deploys the jar and the releaser (wired to the jar address, the initial config, and the FeeController), sets the releaser on the jar, transfers ownership of both contracts to `owner`, and appoints `configSetter` on the releaser (pass `address(0)` to leave the role unset). It emits `JarDeployed` (the initial config is covered by the releaser's own `ConfigSet` in the same transaction) and keeps **no registry and no residual authority** — the Factory can never touch a deployed pair again.
+
+The two roles are independent because they only make sense as different addresses — the owner can always call `setConfig` directly, so the `configSetter` role exists for delegation (cold Safe as owner, warm ops key tuning terms). The combinations map to real configurations: `owner` + ops `configSetter` (the standard setup), `owner` + zero (owner-only config), `0xdead` + a live setter (roles and wiring frozen forever, terms still tunable by a fixed party), or `0xdead` + zero (**trustless from birth** — see the burn tiers above). A zero `owner` reverts; `0xdead` states relinquishment intent unambiguously.
 
 - **Permissionless** — anyone can deploy; the Factory holds no privileges worth gating.
 - **Sender-scoped salts** — the effective CREATE2 salt is `keccak256(msg.sender, salt)`. The TokenJar takes no constructor args (that is what makes its address chain-invariant), so an unscoped salt would let a griefer front-run a partner's deploy on another chain and squat their predicted jar address with a different admin. Scoping means an address is only reachable by the same deployer with the same salt — deploy from the same address on every chain and the jar lands at the same address everywhere.
 - **Predictable** — `predictJar(deployer, salt)` returns the jar address before anything is deployed, so a partner can wire their fee sources (e.g. a TAPI integration) to it in advance.
 - **Chain-invariant** — the Factory itself deploys through the canonical CREATE2 deployer, and its only constructor arg is the (chain-invariant) FeeController address, so the Factory sits at the same address on every chain.
+
+#### Rotating releasers
+
+A partner can move their jar to a new releaser (new terms, new config, or a specialized variant) in two steps, both under their own keys:
+
+1. `factory.deployReleaser(jar, revenueToken, revenueRecipient, threshold, owner, configSetter, salt)` — deploys a fresh releaser pointed at the existing jar, owned by `owner`. It is **inert until adopted**: anyone can deploy a releaser at any jar, but an unadopted releaser cannot move a single asset.
+2. `jar.setReleaser(newReleaser)` — the jar owner adopts it. When the admin is a Safe, both steps batch into one atomic transaction.
+
+The Factory deliberately has **no power to redirect a jar** — `setReleaser` belongs solely to the jar owner, which keeps "the Factory retains no authority" true forever and jar ownership the system's only trust anchor. Once a rotation lands, a pending release against the old releaser reverts atomically (the jar rejects it before any asset moves), searchers re-simulate on the jar's `ReleaserRotated` event, and the old releaser is harmlessly orphaned.
 
 ### Base & interfaces
 

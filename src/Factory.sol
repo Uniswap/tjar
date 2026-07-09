@@ -31,28 +31,48 @@ contract Factory is IFactory {
     address revenueToken,
     address revenueRecipient,
     uint256 threshold,
-    address admin,
+    address owner,
+    address configSetter,
     bytes32 salt
   ) external returns (address jar, address releaser) {
-    require(admin != address(0), InvalidAdmin());
+    require(owner != address(0), InvalidOwner());
     bytes32 effectiveSalt = _effectiveSalt(msg.sender, salt);
 
     // the jar first: it takes no constructor args (cross-chain address parity) and the
     // releaser needs its address
     TokenJar tokenJar = new TokenJar{salt: effectiveSalt}();
-    ExchangeReleaser exchangeReleaser = new ExchangeReleaser{salt: effectiveSalt}(
-      revenueToken, threshold, address(tokenJar), revenueRecipient, address(FEE_CONTROLLER)
+    jar = address(tokenJar);
+    releaser = _deployReleaser(
+      jar, revenueToken, revenueRecipient, threshold, owner, configSetter, effectiveSalt
     );
 
-    tokenJar.setReleaser(address(exchangeReleaser));
-    tokenJar.transferOwnership(admin);
+    tokenJar.setReleaser(releaser);
+    tokenJar.transferOwnership(owner);
 
-    exchangeReleaser.setConfigSetter(admin);
-    exchangeReleaser.transferOwnership(admin);
+    emit JarDeployed(jar, releaser, owner, configSetter, msg.sender, salt);
+  }
 
-    jar = address(tokenJar);
-    releaser = address(exchangeReleaser);
-    emit JarDeployed(jar, releaser, admin, msg.sender, salt);
+  /// @inheritdoc IFactory
+  function deployReleaser(
+    address jar,
+    address revenueToken,
+    address revenueRecipient,
+    uint256 threshold,
+    address owner,
+    address configSetter,
+    bytes32 salt
+  ) external returns (address releaser) {
+    require(owner != address(0), InvalidOwner());
+    releaser = _deployReleaser(
+      jar,
+      revenueToken,
+      revenueRecipient,
+      threshold,
+      owner,
+      configSetter,
+      _effectiveSalt(msg.sender, salt)
+    );
+    emit ReleaserDeployed(jar, releaser, owner, configSetter, msg.sender, salt);
   }
 
   /// @inheritdoc IFactory
@@ -71,6 +91,29 @@ contract Factory is IFactory {
         )
       )
     );
+  }
+
+  /// @notice Deploys an ExchangeReleaser pointed at `jar`, appoints `configSetter` (when
+  /// non-zero), and hands ownership to `owner`
+  /// @dev Never touches the jar: adoption is the jar owner's `setReleaser` call. The releaser
+  /// constructor validates `jar`, the config args, and the fee controller. A zero configSetter
+  /// skips the appointment entirely — the role stays at its unset default with no phantom
+  /// ConfigSetterSet event
+  function _deployReleaser(
+    address jar,
+    address revenueToken,
+    address revenueRecipient,
+    uint256 threshold,
+    address owner,
+    address configSetter,
+    bytes32 effectiveSalt
+  ) internal returns (address) {
+    ExchangeReleaser exchangeReleaser = new ExchangeReleaser{salt: effectiveSalt}(
+      revenueToken, threshold, jar, revenueRecipient, address(FEE_CONTROLLER)
+    );
+    if (configSetter != address(0)) exchangeReleaser.setConfigSetter(configSetter);
+    exchangeReleaser.transferOwnership(owner);
+    return address(exchangeReleaser);
   }
 
   /// @notice Scopes a caller-provided salt to the deployer
