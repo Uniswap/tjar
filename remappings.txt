@@ -1,3 +1,1 @@
 solmate/=lib/solmate/
-@eth-optimism-bedrock/=lib/optimism/packages/contracts-bedrock
-scripts/libraries/Config.sol=lib/optimism/packages/contracts-bedrock/scripts/libraries/Config.sol
