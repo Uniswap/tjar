@@ -154,11 +154,17 @@ src/
 └── releasers
     └── ExchangeReleaser.sol            // Concrete: exchange resource for Token Jar assets
 
+script
+├── Deploy.s.sol                        // Deterministic FeeController + Factory deployment
+├── HandoffFeeController.s.sol          // Per-chain governance handoff ceremony
+└── README.md                           // Deploy runbook: invariants, order, env vars
+
 test
 ├── TokenJar.t.sol
 ├── FeeController.t.sol
 ├── ExchangeReleaser.t.sol
 ├── Factory.t.sol
+├── Deploy.t.sol                        // Deployment-path tests (incl. mainnet-fork proxy test)
 ├── mocks/                              // mock tokens and releasers
 └── utils/                              // shared test base
 ```
