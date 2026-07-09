@@ -32,13 +32,16 @@ Fee Sources → Token Jar → Releaser → (redeemer pays resource) → resource
 
 Releasers serve as the Token Jar's `releaser` and implement the redemption logic:
 
-- [`ExchangeReleaser.sol`](src/releasers/ExchangeReleaser.sol) — the concrete, deployable releaser. A redeemer pays a fixed `threshold` amount of the `resource` token and, in exchange, the Token Jar's accumulated assets are released to a recipient they specify. The collected `resource` is forwarded to the `resourceRecipient`. Sequential nonces (see [`Nonce.sol`](src/base/Nonce.sol)) prevent front-running and enforce deterministic ordering. An `_afterRelease` hook stays virtual as the extension point for specialized variants (e.g. bridged-resource burners).
+- [`ExchangeReleaser.sol`](src/releasers/ExchangeReleaser.sol) — the concrete, deployable releaser. A redeemer pays a fixed `threshold` amount of the `resource` token and, in exchange, the Token Jar's accumulated assets are released to a recipient they specify. The collected `resource` is forwarded to the `resourceRecipient`. Sequential nonces (see [`Nonce.sol`](src/base/Nonce.sol)) prevent front-running and enforce deterministic ordering. An `_afterRelease` hook stays virtual as the extension point for specialized variants.
+- [`OptimismBridgedResourceReleaser.sol`](src/releasers/OptimismBridgedResourceReleaser.sol) — a variant for OP-stack L2s where the revenue token's meaningful destination lives on L1: e.g. a partner's L2 jar is cleared with bridged USDC and that USDC belongs in their mainnet operations wallet — or, for burn-style configs, at `0xdead`, since a local L2 transfer wouldn't burn the canonical token. It collects the `resource` at itself (`resourceRecipient` pinned to `address(this)`), then `_afterRelease` initiates an L2→L1 bridge withdrawal of its **full balance** to a configurable `l1ResourceRecipient` (settable by the owner or `configSetter`; changing it doesn't bump the nonce since it doesn't alter searcher terms). The `resource` is frozen after construction (a different bridged token means a fresh releaser and a jar rotation) and must be withdrawable through the standard bridge (an `OptimismMintableERC20` like USDC.e — not native CCTP USDC); `threshold` and `maxReleaseLength` stay tunable through the usual atomic `setConfig`.
 
 The release configuration — `resource`, `resourceRecipient`, `threshold`, `maxReleaseLength` — is mutable, but only **atomically**, through a single `setConfig` call. There are deliberately no per-field setters: `threshold` is denominated *in* `resource`, so sequential single-field updates would pass through intermediate configs that are validly releasable at their own nonce (e.g. a WETH threshold briefly expressed in USDC units). `setConfig` is callable by the owner or an appointed `configSetter`, and **every call bumps the release nonce** — a pending release priced against old terms reverts instead of executing against terms the caller never saw. Rotating the `configSetter` itself does not bump; it changes who may set terms, not the terms.
 
 #### Burn configurations (what happened to Firepit)
 
 Upstream `protocol-fees` ships **Firepit** releasers that burn the `RESOURCE` by hard-coding the recipient to `0xdead`. TJAR removed them: burning is a *configuration* of the Releaser, not a separate contract — and the immutability a hard-coded burn address appears to offer is weaker than it looks, because the Token Jar owner can always rotate to a different releaser via `setReleaser`. A burn commitment is a property of the whole system (Jar ownership *and* Releaser config), never of the Releaser alone.
+
+(This holds for the bridged variant too: `OptimismBridgedResourceReleaser` exists for the *delivery behavior* — an L2→L1 withdrawal — and a canonical burn is, once again, just a configuration of it: `l1ResourceRecipient = 0xdead`.)
 
 To replicate a Firepit in TJAR, pick the guarantee level you actually need:
 
@@ -150,9 +153,11 @@ src/
 │   ├── IReleaser.sol
 │   ├── IFeeController.sol
 │   ├── IFactory.sol
-│   └── base/                           // INonce, IOwned, IResourceManager
+│   ├── base/                           // INonce, IOwned, IResourceManager
+│   └── external/IL2StandardBridge.sol  // Vendored OP-stack bridge interface
 └── releasers
-    └── ExchangeReleaser.sol            // Concrete: exchange resource for Token Jar assets
+    ├── ExchangeReleaser.sol            // Concrete: exchange resource for Token Jar assets
+    └── OptimismBridgedResourceReleaser.sol // Bridges the collected resource to an L1 recipient
 
 script
 ├── Deploy.s.sol                        // Deterministic FeeController + Factory deployment
@@ -164,6 +169,7 @@ test
 ├── FeeController.t.sol
 ├── ExchangeReleaser.t.sol
 ├── Factory.t.sol
+├── OptimismBridgedResourceReleaser.t.sol
 ├── Deploy.t.sol                        // Deployment-path tests (incl. mainnet-fork proxy test)
 ├── mocks/                              // mock tokens and releasers
 └── utils/                              // shared test base

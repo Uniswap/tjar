@@ -76,10 +76,23 @@ abstract contract ResourceManager is IResourceManager, Owned, Nonce {
     require(_resource != address(0), InvalidResource());
     require(_resourceRecipient != address(0), InvalidResourceRecipient());
     require(_maxReleaseLength != 0, InvalidMaxReleaseLength());
+    _validateConfig(_resource, _resourceRecipient, _threshold, _maxReleaseLength);
     resource = ERC20(_resource);
     resourceRecipient = _resourceRecipient;
     threshold = _threshold;
     maxReleaseLength = _maxReleaseLength;
     emit ConfigSet(_resource, _resourceRecipient, _threshold, _maxReleaseLength);
   }
+
+  /// @notice Hook for specialized releasers to constrain the release configuration
+  /// @dev Runs on every config write — including the constructor's initial set — after the
+  /// base zero-checks and before any state is written. Default: no additional constraints.
+  /// Overrides revert to reject a config (e.g. a bridged-resource variant freezing `resource`
+  /// and pinning `resourceRecipient` to itself).
+  function _validateConfig(
+    address _resource,
+    address _resourceRecipient,
+    uint256 _threshold,
+    uint256 _maxReleaseLength
+  ) internal view virtual {}
 }
