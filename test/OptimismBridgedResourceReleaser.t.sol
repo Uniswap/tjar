@@ -202,6 +202,14 @@ contract OptimismBridgedResourceReleaserTest is Test {
     releaser.setConfig(address(resource), address(0xdead), INITIAL_THRESHOLD, 20);
   }
 
+  /// @dev the zero-threshold guard lives in the base _setConfig, so it holds even though this
+  /// variant's _validateConfig override replaces the parent hook
+  function test_revert_setConfig_zeroThreshold() public {
+    vm.prank(configSetter);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    releaser.setConfig(address(resource), address(releaser), 0, 20);
+  }
+
   /// @dev the base auth still gates the variant's config surface
   function test_revert_setConfig_unauthorized() public {
     vm.prank(alice);
@@ -274,6 +282,14 @@ contract OptimismBridgedResourceReleaserTest is Test {
     vm.expectRevert(OptimismBridgedResourceReleaser.InvalidL1ResourceRecipient.selector);
     new TestOptimismBridgedResourceReleaser(
       address(resource), INITIAL_THRESHOLD, address(tokenJar), address(feeController), address(0)
+    );
+  }
+
+  /// @dev the deploy path hits the same base zero-threshold guard as setConfig
+  function test_revert_constructor_zeroThreshold() public {
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new TestOptimismBridgedResourceReleaser(
+      address(resource), 0, address(tokenJar), address(feeController), l1OpsWallet
     );
   }
 

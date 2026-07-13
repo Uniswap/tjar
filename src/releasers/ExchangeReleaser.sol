@@ -48,6 +48,9 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
   ) ResourceManager(_resource, _threshold, msg.sender, _recipient) {
     require(_tokenJar != address(0), InvalidTokenJar());
     require(_feeController != address(0), InvalidFeeController());
+    // The base constructor's _validateConfig runs before TOKEN_JAR is
+    // assigned, so it cannot make this check — hence the explicit param comparison here.
+    require(_recipient != _tokenJar, InvalidConfig());
     TOKEN_JAR = ITokenJar(payable(_tokenJar));
     FEE_CONTROLLER = IFeeController(_feeController);
   }
@@ -64,13 +67,28 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     resource.safeTransferFrom(msg.sender, resourceRecipient, threshold);
 
     (uint256 feeBps, address feeRecipient) = FEE_CONTROLLER.feeConfig();
-    uint256 fee = threshold * feeBps / BPS_DENOMINATOR;
+    uint256 fee = (threshold * feeBps) / BPS_DENOMINATOR;
     if (fee > 0) resource.safeTransferFrom(msg.sender, feeRecipient, fee);
 
     TOKEN_JAR.release(assets, recipient);
     emit Released(_nonce, recipient, assets);
 
     _afterRelease(assets, recipient);
+  }
+
+  /// @notice Rejects a resource recipient equal to the token jar
+  /// @dev Such a config lets a release caller list the resource among `assets` and reclaim the
+  /// threshold payment in the same call, draining the jar for the cost of the protocol fee
+  /// alone. Guards the setConfig path (TOKEN_JAR is assigned by then). The constructor guards
+  /// the deploy path separately, since TOKEN_JAR is still unset when the base constructor runs
+  /// this hook.
+  function _validateConfig(address, address _resourceRecipient, uint256, uint256)
+    internal
+    view
+    virtual
+    override
+  {
+    require(_resourceRecipient != address(TOKEN_JAR), InvalidConfig());
   }
 
   /// @notice Internal function to handle any post transfer actions

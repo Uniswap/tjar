@@ -66,16 +66,17 @@ abstract contract ResourceManager is IResourceManager, Owned, Nonce {
   }
 
   /// @notice Validates and writes the full release configuration
-  /// @dev Shared by the constructor (no bump; the nonce starts fresh) and setConfig (bumps)
+  /// @dev Shared by the constructor (no bump; the nonce starts fresh) and setConfig (bumps).
   function _setConfig(
     address _resource,
     address _resourceRecipient,
     uint256 _threshold,
     uint256 _maxReleaseLength
   ) private {
-    require(_resource != address(0), InvalidResource());
-    require(_resourceRecipient != address(0), InvalidResourceRecipient());
-    require(_maxReleaseLength != 0, InvalidMaxReleaseLength());
+    require(_resource != address(0), InvalidConfig());
+    require(_resourceRecipient != address(0), InvalidConfig());
+    require(_threshold != 0, InvalidConfig());
+    require(_maxReleaseLength != 0, InvalidConfig());
     _validateConfig(_resource, _resourceRecipient, _threshold, _maxReleaseLength);
     resource = ERC20(_resource);
     resourceRecipient = _resourceRecipient;

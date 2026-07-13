@@ -243,6 +243,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
   }
 
   function test_fuzz_revert_setConfig(address caller, uint256 newThreshold) public {
+    newThreshold = bound(newThreshold, 1, type(uint256).max); // zero is rejected as InvalidConfig
     vm.startPrank(caller);
     if (caller != releaser.configSetter() && caller != releaser.owner()) {
       vm.expectRevert(IResourceManager.Unauthorized.selector);
@@ -290,15 +291,18 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
   }
 
   function test_revert_constructor_validation() public {
-    vm.expectRevert(IResourceManager.InvalidResource.selector);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
     new ExchangeReleaser(
       address(0), INITIAL_TOKEN_AMOUNT, address(tokenJar), recipient, address(feeController)
     );
 
-    vm.expectRevert(IResourceManager.InvalidResourceRecipient.selector);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
     new ExchangeReleaser(
       address(resource), INITIAL_TOKEN_AMOUNT, address(tokenJar), address(0), address(feeController)
     );
+
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new ExchangeReleaser(address(resource), 0, address(tokenJar), recipient, address(feeController));
 
     vm.expectRevert(IReleaser.InvalidTokenJar.selector);
     new ExchangeReleaser(
@@ -306,16 +310,42 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     );
   }
 
+  /// @dev the jar must never be the resource recipient: it would let a release caller list the
+  /// resource among assets and reclaim the threshold, draining the jar for free. Guarded at
+  /// construction by an explicit param check (the base _validateConfig hook cannot catch it —
+  /// TOKEN_JAR is unset when the base constructor runs it)
+  function test_revert_constructor_recipientIsJar() public {
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new ExchangeReleaser(
+      address(resource),
+      INITIAL_TOKEN_AMOUNT,
+      address(tokenJar),
+      address(tokenJar),
+      address(feeController)
+    );
+  }
+
+  /// @dev the same invariant is enforced on the setConfig path, where TOKEN_JAR is assigned and
+  /// the _validateConfig override does the rejecting
+  function test_revert_setConfig_recipientIsJar() public {
+    vm.prank(configSetter);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    releaser.setConfig(address(resource), address(tokenJar), 42, 20);
+  }
+
   function test_revert_setConfig_validation() public {
     vm.startPrank(configSetter);
 
-    vm.expectRevert(IResourceManager.InvalidResource.selector);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
     releaser.setConfig(address(0), recipient, 42, 20);
 
-    vm.expectRevert(IResourceManager.InvalidResourceRecipient.selector);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
     releaser.setConfig(address(resource), address(0), 42, 20);
 
-    vm.expectRevert(IResourceManager.InvalidMaxReleaseLength.selector);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    releaser.setConfig(address(resource), recipient, 0, 20);
+
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
     releaser.setConfig(address(resource), recipient, 42, 0);
 
     vm.stopPrank();
@@ -490,6 +520,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
   }
 
   function test_fuzz_newThreshold(uint256 newThreshold) public {
+    newThreshold = bound(newThreshold, 1, type(uint256).max); // zero is rejected as InvalidConfig
     vm.assume(newThreshold != releaser.threshold());
 
     _setThresholdConfig(owner, newThreshold);

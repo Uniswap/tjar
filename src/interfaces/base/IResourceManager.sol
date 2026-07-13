@@ -10,14 +10,11 @@ interface IResourceManager {
   /// @notice Thrown when an unauthorized address attempts to call a restricted function
   error Unauthorized();
 
-  /// @notice Thrown when setting the resource to the zero address
-  error InvalidResource();
-
-  /// @notice Thrown when setting the resource recipient to the zero address
-  error InvalidResourceRecipient();
-
-  /// @notice Thrown when setting the max release length to zero
-  error InvalidMaxReleaseLength();
+  /// @notice Thrown when setting an invalid release configuration: a zero-address resource, a
+  /// zero-address resource recipient, a zero threshold, a zero max release length, or any
+  /// releaser-specific constraint violated in a _validateConfig override (e.g. a resource
+  /// recipient equal to the token jar)
+  error InvalidConfig();
 
   /// @notice Emitted when the config setter is updated
   /// @param oldConfigSetter The previous config setter
@@ -70,12 +67,13 @@ interface IResourceManager {
   /// value leakage
   /// * a config change invalidates in-flight releases (they revert on nonce), which is a
   /// gas grief on searchers, identical in kind to a Releaser rotation
-  /// @param newResource The resource token; reverts with InvalidResource on zero
+  /// @param newResource The resource token; reverts with InvalidConfig on zero
   /// @param newResourceRecipient The recipient of the resource tokens; reverts with
-  /// InvalidResourceRecipient on zero (0xdead is fine for burn-style configs)
-  /// @param newThreshold The amount of resource tokens required per release
+  /// InvalidConfig on zero (0xdead is fine for burn-style configs)
+  /// @param newThreshold The amount of resource tokens required per release; reverts with
+  /// InvalidConfig on zero
   /// @param newMaxReleaseLength The maximum number of assets per release; reverts with
-  /// InvalidMaxReleaseLength on zero
+  /// InvalidConfig on zero
   function setConfig(
     address newResource,
     address newResourceRecipient,
