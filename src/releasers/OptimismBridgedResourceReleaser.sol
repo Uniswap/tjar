@@ -3,6 +3,7 @@ pragma solidity ^0.8.29;
 
 import {Currency} from "v4-core/types/Currency.sol";
 import {IL2StandardBridge} from "../interfaces/external/IL2StandardBridge.sol";
+import {IOptimismMintableERC20} from "../interfaces/external/IOptimismMintableERC20.sol";
 import {ExchangeReleaser} from "./ExchangeReleaser.sol";
 
 /// @title OptimismBridgedResourceReleaser
@@ -22,7 +23,9 @@ import {ExchangeReleaser} from "./ExchangeReleaser.sol";
 /// - the L1StandardBridge finalizes the withdrawal and delivers the underlying token to
 ///   `l1ResourceRecipient` on L1
 /// @dev The resource must be withdrawable through the L2 Standard Bridge (an
-/// OptimismMintableERC20, e.g. bridged USDC.e — NOT native CCTP USDC).
+/// OptimismMintableERC20, e.g. bridged USDC.e — NOT native CCTP USDC). If it ever stops being
+/// withdrawable (e.g. a bridged→native token migration), every release reverts and fees safely
+/// accumulate in the jar; the remedy is a jar rotation to a fresh releaser, not a config change.
 /// @dev Config surface relative to the base: `resource` is frozen after construction and
 /// `resourceRecipient` is pinned to `address(this)` (both enforced via _validateConfig — the
 /// two-stage flow breaks under either changing); `threshold` and `maxReleaseLength` remain
@@ -77,6 +80,13 @@ contract OptimismBridgedResourceReleaser is ExchangeReleaser {
     address _l1ResourceRecipient
   ) ExchangeReleaser(_resource, _threshold, _tokenJar, address(this), _feeController) {
     require(_l1ResourceRecipient != address(0), InvalidL1ResourceRecipient());
+    // rehearse the bridge's withdrawTo dispatch: the resource is frozen, so a non-bridgeable
+    // token here would brick every release with no config fix — fail at deploy instead
+    try IOptimismMintableERC20(_resource).l1Token() returns (address l1Token) {
+      require(l1Token != address(0), InvalidConfig());
+    } catch {
+      revert InvalidConfig();
+    }
     l1ResourceRecipient = _l1ResourceRecipient;
     emit L1ResourceRecipientSet(address(0), _l1ResourceRecipient);
   }

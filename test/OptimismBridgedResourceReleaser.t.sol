@@ -13,6 +13,7 @@ import {FeeController} from "../src/FeeController.sol";
 import {INonce} from "../src/interfaces/base/INonce.sol";
 import {IResourceManager} from "../src/interfaces/base/IResourceManager.sol";
 import {IL2StandardBridge} from "../src/interfaces/external/IL2StandardBridge.sol";
+import {MockOptimismMintableERC20} from "./mocks/MockOptimismMintableERC20.sol";
 
 /// @dev Test subclass that approves the bridge for the mock resource. On real OP-stack chains
 /// the resource is an OptimismMintableERC20, which the bridge burns without an allowance.
@@ -80,7 +81,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
   Currency[] internal releaseMockToken;
 
   function setUp() public {
-    resource = new MockERC20("Resource", "RSC", 18);
+    resource = new MockOptimismMintableERC20("Resource", "RSC", 18, makeAddr("L1_RESOURCE"));
     mockToken = new MockERC20("MockToken", "MTK", 18);
 
     // put the mock bridge's code at the OP-stack predeploy address
@@ -282,6 +283,30 @@ contract OptimismBridgedResourceReleaserTest is Test {
     vm.expectRevert(OptimismBridgedResourceReleaser.InvalidL1ResourceRecipient.selector);
     new TestOptimismBridgedResourceReleaser(
       address(resource), INITIAL_THRESHOLD, address(tokenJar), address(feeController), address(0)
+    );
+  }
+
+  /// @dev the resource is frozen, so a non-bridgeable token would brick every release with no
+  /// config fix — the constructor rehearses the bridge's l1Token() dispatch and fails at deploy
+  function test_revert_constructor_nonBridgeableResource() public {
+    MockERC20 plainToken = new MockERC20("Plain", "PLN", 18);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new TestOptimismBridgedResourceReleaser(
+      address(plainToken), INITIAL_THRESHOLD, address(tokenJar), address(feeController), l1OpsWallet
+    );
+  }
+
+  /// @dev a bridgeable-looking resource whose l1Token is unset is rejected the same way
+  function test_revert_constructor_zeroL1TokenResource() public {
+    MockOptimismMintableERC20 zeroL1Token =
+      new MockOptimismMintableERC20("ZeroL1", "ZL1", 18, address(0));
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new TestOptimismBridgedResourceReleaser(
+      address(zeroL1Token),
+      INITIAL_THRESHOLD,
+      address(tokenJar),
+      address(feeController),
+      l1OpsWallet
     );
   }
 
