@@ -34,6 +34,13 @@ Order matters: factory-deployed releasers call `feeConfig()` on every release, s
 FeeController must exist before any partner deployment — the script enforces this by
 deploying it first in the same run.
 
+> **New chains: deploy before wiring.** Before any fee source is pointed at a jar
+> address on a chain, verify the Factory's code sits at its canonical address there and
+> deploy the jar itself. Funds sent to a predicted-but-undeployed address are stranded
+> if the Factory can never land on that chain, and a contract-account deployer another
+> party can recreate exposes them to theft (see the prefunding caution in the main
+> README). Use an EOA deployer for any salt reused across chains.
+
 ## 2. Hand off to governance (per chain)
 
 ```bash

@@ -91,8 +91,10 @@ The two roles are independent because they only make sense as different addresse
 
 - **Permissionless** — anyone can deploy; the Factory holds no privileges worth gating.
 - **Sender-scoped salts** — the effective CREATE2 salt is `keccak256(msg.sender, salt)`. The TokenJar takes no constructor args (that is what makes its address chain-invariant), so an unscoped salt would let a griefer front-run a partner's deploy on another chain and squat their predicted jar address with a different admin. Scoping means an address is only reachable by the same deployer with the same salt — deploy from the same address on every chain and the jar lands at the same address everywhere.
-- **Predictable** — `predictJar(deployer, salt)` returns the jar address before anything is deployed, so a partner can wire their fee sources (e.g. a TAPI integration) to it in advance.
+- **Predictable** — `predictJar(deployer, salt)` returns the jar address before anything is deployed, so a partner can wire their fee sources (e.g. a TAPI integration) to it in advance. Wire *addresses* in advance, never funds — see the prefunding caution below.
 - **Chain-invariant** — the Factory itself deploys through the canonical CREATE2 deployer, and its only constructor arg is the (chain-invariant) FeeController address, so the Factory sits at the same address on every chain.
+
+**Prefunding caution** — deploy the jar (one cheap, permissionless transaction) *before* fees flow to its address. A predicted-but-undeployed address is reachable only through the canonical Factory on that chain and only by the same deployer identity, and neither assumption is enforceable on-chain: if the Factory never lands on a chain, funds sent early are stranded; and a contract-account deployer (e.g. a CREATE-based Safe) that a third party can recreate on another chain lets them call `deploy()` as that sender and claim the jar under their own owner. Deploy from an EOA for any salt reused across chains, and verify the Factory's code at its canonical address on each new chain before wiring anything.
 
 #### Rotating releasers
 
