@@ -397,6 +397,17 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.expectRevert(IResourceManager.InvalidConfig.selector);
     new ExchangeReleaser(address(resource), 0, address(tokenJar), recipient, address(feeController));
 
+    // codeless resource: a typo'd or wrong-chain token would brick every release — and be
+    // permanently unfixable in relinquished-ownership configs
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new ExchangeReleaser(
+      makeAddr("CODELESS"),
+      INITIAL_TOKEN_AMOUNT,
+      address(tokenJar),
+      recipient,
+      address(feeController)
+    );
+
     vm.expectRevert(IReleaser.InvalidTokenJar.selector);
     new ExchangeReleaser(
       address(resource), INITIAL_TOKEN_AMOUNT, address(0), recipient, address(feeController)
@@ -431,6 +442,9 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.expectRevert(IResourceManager.InvalidConfig.selector);
     releaser.setConfig(address(0), recipient, 42, 20);
+
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    releaser.setConfig(makeAddr("CODELESS"), recipient, 42, 20);
 
     vm.expectRevert(IResourceManager.InvalidConfig.selector);
     releaser.setConfig(address(resource), address(0), 42, 20);

@@ -10,10 +10,10 @@ interface IResourceManager {
   /// @notice Thrown when an unauthorized address attempts to call a restricted function
   error Unauthorized();
 
-  /// @notice Thrown when setting an invalid release configuration: a zero-address resource, a
-  /// zero-address resource recipient, a zero threshold, a zero max release length, or any
-  /// releaser-specific constraint violated in a _validateConfig override (e.g. a resource
-  /// recipient equal to the token jar)
+  /// @notice Thrown when setting an invalid release configuration: a zero-address or codeless
+  /// resource, a zero-address resource recipient, a zero threshold, a zero max release length,
+  /// or any releaser-specific constraint violated in a _validateConfig override (e.g. a
+  /// resource recipient equal to the token jar)
   error InvalidConfig();
 
   /// @notice Emitted when the config setter is updated
@@ -67,7 +67,7 @@ interface IResourceManager {
   /// value leakage
   /// * a config change invalidates in-flight releases (they revert on nonce), which is a
   /// gas grief on searchers, identical in kind to a Releaser rotation
-  /// @param newResource The resource token; reverts with InvalidConfig on zero
+  /// @param newResource The resource token; reverts with InvalidConfig on zero or codeless
   /// @param newResourceRecipient The recipient of the resource tokens; reverts with
   /// InvalidConfig on zero (0xdead is fine for burn-style configs)
   /// @param newThreshold The amount of resource tokens required per release; reverts with

@@ -74,6 +74,7 @@ abstract contract ResourceManager is IResourceManager, Owned, Nonce {
     uint256 _maxReleaseLength
   ) private {
     require(_resource != address(0), InvalidConfig());
+    require(_resource.code.length != 0, InvalidConfig());
     require(_resourceRecipient != address(0), InvalidConfig());
     require(_threshold != 0, InvalidConfig());
     require(_maxReleaseLength != 0, InvalidConfig());
