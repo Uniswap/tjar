@@ -305,6 +305,16 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     assertEq(releaser.nonce(), nonce + 2);
   }
 
+  /// @dev a zero recipient would irreversibly burn the released assets — 0xdead is the burn
+  /// convention, so zero is always a caller mistake
+  function test_revert_release_zeroRecipient() public {
+    uint256 nonce = releaser.nonce();
+    vm.startPrank(alice);
+    resource.approve(address(releaser), type(uint256).max);
+    vm.expectRevert(IReleaser.InvalidRecipient.selector);
+    releaser.release(nonce, releaseMockToken, address(0));
+  }
+
   function test_revert_release_tooManyAssets() public {
     Currency[] memory assets = new Currency[](21);
     for (uint256 i = 0; i < 21; i++) {

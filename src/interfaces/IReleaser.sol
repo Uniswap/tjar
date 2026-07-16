@@ -17,6 +17,10 @@ interface IReleaser is IResourceManager, INonce {
   /// @notice Thrown when constructing with a zero-address fee controller
   error InvalidFeeController();
 
+  /// @notice Thrown when releasing to the zero address, which would irreversibly burn the
+  /// released assets (use 0xdead for intentional burns)
+  error InvalidRecipient();
+
   event Released(uint256 indexed nonce, address indexed recipient, Currency[] assets);
 
   /// @return Address of the Token Jar contract that will release the assets

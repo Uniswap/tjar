@@ -65,6 +65,7 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     external
     handleNonce(_nonce)
   {
+    require(recipient != address(0), InvalidRecipient());
     require(assets.length <= maxReleaseLength, TooManyAssets());
     resource.safeTransferFrom(msg.sender, resourceRecipient, threshold);
 
