@@ -59,6 +59,8 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
   /// @dev The caller pays `threshold` to the resource recipient, plus a protocol fee of
   /// `threshold * feeBps / BPS_DENOMINATOR` to the protocol fee recipient. The fee transfer is
   /// skipped entirely when the fee rounds to zero
+  /// @dev The nonce bump and threshold debit precede the jar
+  /// sweep, so a reentrant release pays another full threshold.
   function release(uint256 _nonce, Currency[] calldata assets, address recipient)
     external
     handleNonce(_nonce)
