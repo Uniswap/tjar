@@ -39,7 +39,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.expectEmit(true, true, false, true, address(releaser));
     emit IReleaser.Released(releaser.nonce(), alice, releaseMockToken);
 
-    releaser.release(releaser.nonce(), releaseMockToken, alice);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, type(uint256).max);
 
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
     assertEq(mockToken.balanceOf(address(tokenJar)), 0);
@@ -60,7 +60,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.expectEmit(true, true, false, true, address(releaser));
     emit IReleaser.Released(releaser.nonce(), alice, releaseMockNative);
 
-    releaser.release(releaser.nonce(), releaseMockNative, alice);
+    releaser.release(releaser.nonce(), releaseMockNative, alice, type(uint256).max);
 
     assertEq(CurrencyLibrary.ADDRESS_ZERO.balanceOf(address(tokenJar)), 0);
     assertEq(resource.balanceOf(alice), 0);
@@ -82,7 +82,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
     vm.expectRevert(); // reverts on token insufficient allowance
-    releaser.release(nonce, fuzzReleaseAny[seed % fuzzReleaseAny.length], alice);
+    releaser.release(nonce, fuzzReleaseAny[seed % fuzzReleaseAny.length], alice, type(uint256).max);
   }
 
   function test_fuzz_revert_release_invalid_nonce(uint256 nonce, uint256 seed) public {
@@ -91,7 +91,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
     vm.expectRevert(INonce.InvalidNonce.selector);
-    releaser.release(nonce, fuzzReleaseAny[seed % fuzzReleaseAny.length], alice);
+    releaser.release(nonce, fuzzReleaseAny[seed % fuzzReleaseAny.length], alice, type(uint256).max);
   }
 
   function test_revert_constructor_zero_fee_controller() public {
@@ -107,7 +107,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(releaser.nonce(), releaseMockToken, alice);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, type(uint256).max);
 
     assertEq(resource.balanceOf(recipient), releaser.threshold());
     assertEq(resource.balanceOf(protocolFeeRecipient), 0);
@@ -124,7 +124,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(releaser.nonce(), releaseMockToken, alice);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, type(uint256).max);
 
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
     assertEq(resource.balanceOf(alice), 0);
@@ -143,7 +143,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(releaser.nonce(), releaseMockToken, alice);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, type(uint256).max);
 
     assertEq(resource.balanceOf(alice), 0);
     assertEq(resource.balanceOf(recipient), releaser.threshold());
@@ -155,7 +155,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
   function test_release_fee_reads_live_config() public {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(releaser.nonce(), releaseMockToken, alice);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(resource.balanceOf(protocolFeeRecipient), 0);
@@ -169,9 +169,50 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(bob);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(releaser.nonce(), releaseMockToken, bob);
+    releaser.release(releaser.nonce(), releaseMockToken, bob, type(uint256).max);
 
     assertEq(resource.balanceOf(bob), INITIAL_TOKEN_AMOUNT);
+    assertEq(resource.balanceOf(protocolFeeRecipient), fee);
+  }
+
+  /// @dev maxFee pins the searcher's simulated cost: a fee raised between simulation and
+  /// inclusion reverts instead of silently overcharging — the fee is the one release term
+  /// the nonce does not cover
+  function test_revert_release_fee_exceeds_max_fee() public {
+    // alice simulates at the current config: 1% fee
+    vm.prank(owner);
+    feeController.setFeeBps(100);
+    uint256 simulatedFee = releaser.threshold() * 100 / releaser.BPS_DENOMINATOR();
+
+    // governance raises the fee to the 10% cap before her release lands
+    vm.prank(owner);
+    feeController.setFeeBps(1000);
+    uint256 liveFee = releaser.threshold() * 1000 / releaser.BPS_DENOMINATOR();
+
+    resource.mint(alice, liveFee);
+    uint256 nonce = releaser.nonce();
+
+    vm.startPrank(alice);
+    resource.approve(address(releaser), type(uint256).max);
+    vm.expectRevert(
+      abi.encodeWithSelector(IReleaser.FeeExceedsMax.selector, liveFee, simulatedFee)
+    );
+    releaser.release(nonce, releaseMockToken, alice, simulatedFee);
+  }
+
+  function test_release_fee_equals_max_fee() public {
+    uint256 feeBps = 500; // 5%
+    uint256 fee = releaser.threshold() * feeBps / releaser.BPS_DENOMINATOR();
+
+    vm.prank(owner);
+    feeController.setFeeBps(feeBps);
+
+    resource.mint(alice, fee);
+
+    vm.startPrank(alice);
+    resource.approve(address(releaser), type(uint256).max);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, fee);
+
     assertEq(resource.balanceOf(protocolFeeRecipient), fee);
   }
 
@@ -187,7 +228,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
     vm.expectRevert(); // reverts on token insufficient balance for the fee pull
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
   }
 
   /// @dev test that two transactions with the same nonce, the second one should revert
@@ -201,7 +242,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.expectEmit(true, true, false, true, address(releaser));
     emit IReleaser.Released(nonce, alice, releaseMockToken);
 
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
     assertEq(mockToken.balanceOf(address(tokenJar)), 0);
     assertEq(resource.balanceOf(alice), 0);
@@ -210,7 +251,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     // Attempt to frontrun with the same nonce
     vm.expectRevert(INonce.InvalidNonce.selector);
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
   }
 
   /// @dev on a single chain releaser, malicious tokens will hard revert
@@ -220,7 +261,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     resource.approve(address(releaser), type(uint256).max);
 
     vm.expectRevert();
-    releaser.release(nonce, releaseMockReverting, alice);
+    releaser.release(nonce, releaseMockReverting, alice, type(uint256).max);
   }
 
   /// @dev reentrancy is third-party reachable: anyone can donate a malicious token to the jar
@@ -246,7 +287,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     // sweep-time token revert, so the outer failure is a wrapped error rather than the raw
     // selector — the meaningful proof is that the whole release unwound (asserted below)
     vm.expectRevert();
-    releaser.release(nonce, assets, alice);
+    releaser.release(nonce, assets, alice, type(uint256).max);
     vm.stopPrank();
 
     // the outer release fully unwound: nothing paid, nothing swept
@@ -286,7 +327,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(nonce, assets, alice);
+    releaser.release(nonce, assets, alice, type(uint256).max);
     vm.stopPrank();
 
     // mockToken left the jar exactly once — to the attacker's reentrant call, not twice
@@ -312,7 +353,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
     vm.expectRevert(IReleaser.InvalidRecipient.selector);
-    releaser.release(nonce, releaseMockToken, address(0));
+    releaser.release(nonce, releaseMockToken, address(0), type(uint256).max);
   }
 
   function test_revert_release_tooManyAssets() public {
@@ -324,7 +365,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     uint256 nonce = releaser.nonce();
 
     vm.expectRevert(IReleaser.TooManyAssets.selector);
-    releaser.release(nonce, assets, alice);
+    releaser.release(nonce, assets, alice, type(uint256).max);
   }
 
   function test_fuzz_setConfigSetter(address caller, address newSetter) public {
@@ -479,14 +520,14 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     // alice's pending release reverts on the nonce; neither token is pulled
     vm.prank(alice);
     vm.expectRevert(INonce.InvalidNonce.selector);
-    releaser.release(pendingNonce, releaseMockToken, alice);
+    releaser.release(pendingNonce, releaseMockToken, alice, type(uint256).max);
     assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
     assertEq(mockToken1.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
 
     // re-simulated at the current nonce, the release pulls the NEW resource at the NEW threshold
     uint256 currentNonce = releaser.nonce();
     vm.prank(alice);
-    releaser.release(currentNonce, releaseMockToken, alice);
+    releaser.release(currentNonce, releaseMockToken, alice, type(uint256).max);
 
     assertEq(mockToken1.balanceOf(alice), INITIAL_TOKEN_AMOUNT - newThreshold);
     assertEq(mockToken1.balanceOf(recipient), newThreshold);
@@ -510,7 +551,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     mockToken1.approve(address(releaser), type(uint256).max);
-    releaser.release(currentNonce, releaseMockToken, alice);
+    releaser.release(currentNonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(mockToken1.balanceOf(recipient), newThreshold);
@@ -533,7 +574,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     resource.approve(address(releaser), type(uint256).max);
     uint256 nonce = releaser.nonce();
     vm.expectRevert(IReleaser.TooManyAssets.selector);
-    releaser.release(nonce, assets, alice);
+    releaser.release(nonce, assets, alice, type(uint256).max);
     vm.stopPrank();
 
     // raise the cap back above it: the same batch releases
@@ -542,7 +583,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     uint256 freshNonce = releaser.nonce();
     vm.prank(alice);
-    releaser.release(freshNonce, assets, alice);
+    releaser.release(freshNonce, assets, alice, type(uint256).max);
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
   }
 
@@ -571,7 +612,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     // the release simulated against the old terms reverts on the nonce
     vm.prank(alice);
     vm.expectRevert(INonce.InvalidNonce.selector);
-    releaser.release(pendingNonce, releaseMockToken, alice);
+    releaser.release(pendingNonce, releaseMockToken, alice, type(uint256).max);
     assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT); // nothing was pulled
 
     // re-simulating at the current nonce executes at the new terms
@@ -579,7 +620,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     uint256 currentNonce = releaser.nonce();
 
     vm.prank(alice);
-    releaser.release(currentNonce, releaseMockToken, alice);
+    releaser.release(currentNonce, releaseMockToken, alice, type(uint256).max);
 
     assertEq(resource.balanceOf(alice), 0);
     assertEq(resource.balanceOf(recipient), INITIAL_TOKEN_AMOUNT * 2);
@@ -641,7 +682,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), newThreshold);
-    releaser.release(currentNonce, releaseMockBoth, alice);
+    releaser.release(currentNonce, releaseMockBoth, alice, type(uint256).max);
 
     assertEq(releaser.nonce(), currentNonce + 1);
     assertEq(resource.balanceOf(alice), 0);

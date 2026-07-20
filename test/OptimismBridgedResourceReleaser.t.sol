@@ -130,7 +130,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
       address(resource), address(releaser), l1OpsWallet, INITIAL_THRESHOLD, 100_000, bytes("")
     );
 
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT); // jar assets released
@@ -146,7 +146,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
     uint256 nonce = releaser.nonce();
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(resource.balanceOf(address(releaser)), 0);
@@ -162,7 +162,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
     uint256 nonce = releaser.nonce();
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(resource.balanceOf(protocolFeeRecipient), fee);
@@ -230,7 +230,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
 
     vm.prank(alice);
     vm.expectRevert(INonce.InvalidNonce.selector);
-    releaser.release(pendingNonce, releaseMockToken, alice);
+    releaser.release(pendingNonce, releaseMockToken, alice, type(uint256).max);
   }
 
   /// @dev the L1 destination is partner config: settable by the configSetter or the owner,
@@ -257,7 +257,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
     emit MockL2StandardBridge.Withdrawn(
       address(resource), address(releaser), newWallet, INITIAL_THRESHOLD, 100_000, bytes("")
     );
-    releaser.release(nonce, releaseMockToken, alice);
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
   }
 
@@ -334,7 +334,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
     emit MockL2StandardBridge.Withdrawn(
       address(resource), address(burnReleaser), L1_BURN, INITIAL_THRESHOLD, 100_000, bytes("")
     );
-    burnReleaser.release(0, releaseMockToken, alice);
+    burnReleaser.release(0, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
   }
 }

@@ -247,7 +247,7 @@ contract FactoryTest is ProtocolFeesTestBase {
     uint256 nonce = r.nonce();
     vm.startPrank(alice);
     resource.approve(releaser, type(uint256).max);
-    r.release(nonce, releaseMockToken, alice);
+    r.release(nonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
@@ -274,7 +274,7 @@ contract FactoryTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(newReleaser, type(uint256).max);
     vm.expectRevert(ITokenJar.Unauthorized.selector);
-    ExchangeReleaser(newReleaser).release(0, releaseMockToken, alice);
+    ExchangeReleaser(newReleaser).release(0, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT); // nothing was pulled
@@ -312,7 +312,7 @@ contract FactoryTest is ProtocolFeesTestBase {
     // the old releaser's pending release now reverts inside jar.release; nothing is pulled
     vm.prank(alice);
     vm.expectRevert(ITokenJar.Unauthorized.selector);
-    ExchangeReleaser(oldReleaser).release(pendingNonce, releaseMockToken, alice);
+    ExchangeReleaser(oldReleaser).release(pendingNonce, releaseMockToken, alice, type(uint256).max);
     assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
 
     // the searcher re-simulates against the new releaser and releases at the new terms
@@ -320,7 +320,7 @@ contract FactoryTest is ProtocolFeesTestBase {
     uint256 freshNonce = ExchangeReleaser(newReleaser).nonce();
     vm.startPrank(alice);
     resource.approve(newReleaser, type(uint256).max);
-    ExchangeReleaser(newReleaser).release(freshNonce, releaseMockToken, alice);
+    ExchangeReleaser(newReleaser).release(freshNonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
@@ -341,7 +341,7 @@ contract FactoryTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(releaser, type(uint256).max);
-    r.release(nonce, releaseMockBoth, alice);
+    r.release(nonce, releaseMockBoth, alice, type(uint256).max);
     vm.stopPrank();
 
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);

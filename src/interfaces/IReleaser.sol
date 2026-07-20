@@ -21,6 +21,11 @@ interface IReleaser is IResourceManager, INonce {
   /// released assets (use 0xdead for intentional burns)
   error InvalidRecipient();
 
+  /// @notice Thrown when the live protocol fee exceeds the caller's bound
+  /// @param fee The fee computed from the current fee controller config
+  /// @param maxFee The caller-supplied maximum
+  error FeeExceedsMax(uint256 fee, uint256 maxFee);
+
   event Released(uint256 indexed nonce, address indexed recipient, Currency[] assets);
 
   /// @return Address of the Token Jar contract that will release the assets
@@ -34,5 +39,9 @@ interface IReleaser is IResourceManager, INonce {
   /// @param assets The list of assets (addresses) to release, which may have length limits
   /// Native tokens (Ether) are represented as the zero address
   /// @param recipient The address to receive the released assets, paid out by Token Jar
-  function release(uint256 _nonce, Currency[] calldata assets, address recipient) external;
+  /// @param maxFee The maximum protocol fee the caller will pay. The fee is the one release
+  /// term the nonce does not cover (it is read live from the fee controller), so callers bound
+  /// it explicitly; pass type(uint256).max to accept any fee up to the controller's cap
+  function release(uint256 _nonce, Currency[] calldata assets, address recipient, uint256 maxFee)
+    external;
 }

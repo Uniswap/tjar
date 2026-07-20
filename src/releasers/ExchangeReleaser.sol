@@ -57,11 +57,11 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
 
   /// @inheritdoc IReleaser
   /// @dev The caller pays `threshold` to the resource recipient, plus a protocol fee of
-  /// `threshold * feeBps / BPS_DENOMINATOR` to the protocol fee recipient. The fee transfer is
-  /// skipped entirely when the fee rounds to zero
+  /// `threshold * feeBps / BPS_DENOMINATOR` (bounded by `maxFee`) to the protocol fee
+  /// recipient. The fee transfer is skipped entirely when the fee rounds to zero
   /// @dev The nonce bump and threshold debit precede the jar
   /// sweep, so a reentrant release pays another full threshold.
-  function release(uint256 _nonce, Currency[] calldata assets, address recipient)
+  function release(uint256 _nonce, Currency[] calldata assets, address recipient, uint256 maxFee)
     external
     handleNonce(_nonce)
   {
@@ -71,6 +71,7 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
 
     (uint256 feeBps, address feeRecipient) = FEE_CONTROLLER.feeConfig();
     uint256 fee = (threshold * feeBps) / BPS_DENOMINATOR;
+    require(fee <= maxFee, FeeExceedsMax(fee, maxFee));
     if (fee > 0) resource.safeTransferFrom(msg.sender, feeRecipient, fee);
 
     TOKEN_JAR.release(assets, recipient);

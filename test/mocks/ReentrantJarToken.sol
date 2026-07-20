@@ -40,7 +40,7 @@ contract ReentrantJarToken is MockERC20 {
   function transfer(address destination, uint256 amount) public override returns (bool) {
     if (armed) {
       armed = false;
-      releaser.release(reentryNonce, reentryAssets, reentryRecipient);
+      releaser.release(reentryNonce, reentryAssets, reentryRecipient, type(uint256).max);
     }
     return super.transfer(destination, amount);
   }

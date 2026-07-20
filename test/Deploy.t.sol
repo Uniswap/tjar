@@ -98,7 +98,7 @@ contract DeployTest is Test {
 
     vm.startPrank(searcher);
     resource.approve(releaser, type(uint256).max);
-    ExchangeReleaser(releaser).release(0, assets, searcher);
+    ExchangeReleaser(releaser).release(0, assets, searcher, type(uint256).max);
     vm.stopPrank();
 
     assertEq(assetToken.balanceOf(searcher), 1000e18);
