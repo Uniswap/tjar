@@ -23,6 +23,7 @@ contract Factory is IFactory {
   /// constructor arg — and therefore the Factory's own initcode and address — chain-invariant
   constructor(address _feeController) {
     require(_feeController != address(0), InvalidFeeController());
+    require(_feeController.code.length != 0, InvalidFeeController());
     FEE_CONTROLLER = IFeeController(_feeController);
   }
 

@@ -103,6 +103,12 @@ contract FactoryTest is ProtocolFeesTestBase {
     new Factory(address(0));
   }
 
+  function test_revert_constructor_codelessFeeController() public {
+    // A non-zero address with no code (e.g. Factory deployed before the singleton lands)
+    vm.expectRevert(IFactory.InvalidFeeController.selector);
+    new Factory(makeAddr("codelessFeeController"));
+  }
+
   function test_deploy_factoryRetainsNoAuthority() public {
     (address jar, address releaser) = _deploy(bob);
 
