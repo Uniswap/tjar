@@ -127,7 +127,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
 
     vm.expectEmit(true, true, true, true, L2_STANDARD_BRIDGE);
     emit MockL2StandardBridge.Withdrawn(
-      address(resource), address(releaser), l1OpsWallet, INITIAL_THRESHOLD, 100_000, bytes("")
+      address(resource), address(releaser), l1OpsWallet, INITIAL_THRESHOLD, 200_000, bytes("")
     );
 
     releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
@@ -255,7 +255,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
 
     vm.expectEmit(true, true, true, true, L2_STANDARD_BRIDGE);
     emit MockL2StandardBridge.Withdrawn(
-      address(resource), address(releaser), newWallet, INITIAL_THRESHOLD, 100_000, bytes("")
+      address(resource), address(releaser), newWallet, INITIAL_THRESHOLD, 200_000, bytes("")
     );
     releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();
@@ -332,7 +332,7 @@ contract OptimismBridgedResourceReleaserTest is Test {
 
     vm.expectEmit(true, true, true, true, L2_STANDARD_BRIDGE);
     emit MockL2StandardBridge.Withdrawn(
-      address(resource), address(burnReleaser), L1_BURN, INITIAL_THRESHOLD, 100_000, bytes("")
+      address(resource), address(burnReleaser), L1_BURN, INITIAL_THRESHOLD, 200_000, bytes("")
     );
     burnReleaser.release(0, releaseMockToken, alice, type(uint256).max);
     vm.stopPrank();

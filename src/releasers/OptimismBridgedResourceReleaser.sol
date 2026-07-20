@@ -55,9 +55,10 @@ contract OptimismBridgedResourceReleaser is ExchangeReleaser {
   /// dependency is not needed.
   address internal constant L2_STANDARD_BRIDGE = 0x4200000000000000000000000000000000000010;
 
-  /// @dev The minimum gas limit for the withdrawal transaction on L1;
-  /// enough for a simple ERC20 transfer
-  uint32 internal constant WITHDRAWAL_MIN_GAS = 100_000;
+  /// @dev The minimum gas limit for the withdrawal transaction on L1; sized with headroom for
+  /// a contract recipient (e.g. an L1 forwarder). An under-gassed finalization is replayable
+  /// from bridge escrow, so this floor is about avoiding delay, not loss.
+  uint32 internal constant WITHDRAWAL_MIN_GAS = 200_000;
 
   /// @notice Where the bridged resource is delivered on L1
   /// @dev `0xdead` is fine for burn-style configs
