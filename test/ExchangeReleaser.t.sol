@@ -194,9 +194,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    vm.expectRevert(
-      abi.encodeWithSelector(IReleaser.FeeExceedsMax.selector, liveFee, simulatedFee)
-    );
+    vm.expectRevert(abi.encodeWithSelector(IReleaser.FeeExceedsMax.selector, liveFee, simulatedFee));
     releaser.release(nonce, releaseMockToken, alice, simulatedFee);
   }
 

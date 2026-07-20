@@ -26,6 +26,9 @@ interface IReleaser is IResourceManager, INonce {
   /// @param maxFee The caller-supplied maximum
   error FeeExceedsMax(uint256 fee, uint256 maxFee);
 
+  /// @notice Emitted on every release with the caller-requested asset list
+  /// @dev `assets` is the requested (superset) list — zero-balance entries transfer nothing.
+  /// Reconstruct actual outflows from the assets' own Transfer logs, not from this event
   event Released(uint256 indexed nonce, address indexed recipient, Currency[] assets);
 
   /// @return Address of the Token Jar contract that will release the assets
