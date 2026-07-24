@@ -214,6 +214,42 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     assertEq(resource.balanceOf(protocolFeeRecipient), fee);
   }
 
+  /// @dev the quote equals the actual debit when no fee is configured
+  function test_releaseCost_matchesDebit_noFee() public {
+    (uint256 total, uint256 fee) = releaser.releaseCost();
+    assertEq(fee, 0);
+    assertEq(total, releaser.threshold());
+
+    uint256 balBefore = resource.balanceOf(alice);
+    vm.startPrank(alice);
+    resource.approve(address(releaser), type(uint256).max);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, fee);
+    vm.stopPrank();
+
+    assertEq(balBefore - resource.balanceOf(alice), total);
+  }
+
+  /// @dev the quote equals the actual debit with a live fee, and `fee` is a usable `maxFee` bound
+  function test_releaseCost_matchesDebit_withFee() public {
+    uint256 feeBps = 500;
+    vm.prank(owner);
+    feeController.setFeeBps(feeBps);
+
+    (uint256 total, uint256 fee) = releaser.releaseCost();
+    uint256 expectedFee = releaser.threshold() * feeBps / releaser.BPS_DENOMINATOR();
+    assertEq(fee, expectedFee);
+    assertEq(total, releaser.threshold() + expectedFee);
+
+    resource.mint(alice, fee); // alice starts with exactly the threshold; cover the fee on top
+    uint256 balBefore = resource.balanceOf(alice);
+    vm.startPrank(alice);
+    resource.approve(address(releaser), type(uint256).max);
+    releaser.release(releaser.nonce(), releaseMockToken, alice, fee);
+    vm.stopPrank();
+
+    assertEq(balBefore - resource.balanceOf(alice), total);
+  }
+
   function test_revert_release_insufficient_balance_for_fee() public {
     vm.prank(owner);
     feeController.setFeeBps(500);

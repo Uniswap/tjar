@@ -37,6 +37,14 @@ interface IReleaser is IResourceManager, INonce {
   /// @return Address of the singleton fee controller holding the protocol fee configuration
   function FEE_CONTROLLER() external view returns (IFeeController);
 
+  /// @notice The total resource a caller must hold and approve to release at the current block:
+  /// the threshold plus the live protocol fee
+  /// @dev The fee is read live from the fee controller and is NOT nonce-protected, so this is a
+  /// current-block quote, not a locked price — pass `fee` as the `maxFee` bound to `release`
+  /// @return total The full resource debit (threshold + fee)
+  /// @return fee The live protocol fee component
+  function releaseCost() external view returns (uint256 total, uint256 fee);
+
   /// @notice Releases assets to a specified recipient if the resource threshold is met
   /// @param _nonce The nonce for the release, must equal to the contract nonce otherwise revert
   /// @param assets The list of assets (addresses) to release, which may have length limits

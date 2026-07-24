@@ -80,6 +80,13 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     _afterRelease(assets, recipient);
   }
 
+  /// @inheritdoc IReleaser
+  function releaseCost() external view returns (uint256 total, uint256 fee) {
+    (uint256 feeBps,) = FEE_CONTROLLER.feeConfig();
+    fee = (threshold * feeBps) / BPS_DENOMINATOR;
+    total = threshold + fee;
+  }
+
   /// @notice Rejects a resource recipient equal to the token jar
   /// @dev Such a config lets a release caller list the resource among `assets` and reclaim the
   /// threshold payment in the same call, draining the jar for the cost of the protocol fee
