@@ -43,7 +43,7 @@ contract FeeController is Owned, IFeeController {
 
   /// @inheritdoc IFeeController
   function setFeeBps(uint256 newFeeBps) external onlyOwner {
-    require(newFeeBps <= MAX_FEE_BPS, FeeTooHigh());
+    require(newFeeBps <= MAX_FEE_BPS, FeeTooHigh(newFeeBps, MAX_FEE_BPS));
     // A non-zero fee must have a recipient; prevents charging a fee to address(0).
     require(newFeeBps == 0 || feeRecipient != address(0), InvalidFeeRecipient());
     emit FeeBpsSet(feeBps, newFeeBps);

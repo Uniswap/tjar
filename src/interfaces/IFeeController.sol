@@ -6,7 +6,9 @@ pragma solidity ^0.8.29;
 /// every Releaser on a chain
 interface IFeeController {
   /// @notice Thrown when attempting to set the fee above `MAX_FEE_BPS`
-  error FeeTooHigh();
+  /// @param feeBps The requested fee in basis points
+  /// @param maxFeeBps The `MAX_FEE_BPS` cap
+  error FeeTooHigh(uint256 feeBps, uint256 maxFeeBps);
 
   /// @notice Thrown when attempting to set the fee recipient to the zero address
   error InvalidFeeRecipient();

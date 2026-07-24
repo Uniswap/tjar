@@ -72,9 +72,10 @@ contract FeeControllerTest is Test {
   }
 
   function test_setFeeBps_RevertsAboveCap() public {
-    uint256 aboveCap = feeController.MAX_FEE_BPS() + 1;
+    uint256 maxBps = feeController.MAX_FEE_BPS();
+    uint256 aboveCap = maxBps + 1;
     vm.prank(owner);
-    vm.expectRevert(IFeeController.FeeTooHigh.selector);
+    vm.expectRevert(abi.encodeWithSelector(IFeeController.FeeTooHigh.selector, aboveCap, maxBps));
     feeController.setFeeBps(aboveCap);
 
     assertEq(feeController.feeBps(), 0);
@@ -164,9 +165,10 @@ contract FeeControllerTest is Test {
   }
 
   function testFuzz_setFeeBps_AboveCapReverts(uint256 newFeeBps) public {
-    newFeeBps = bound(newFeeBps, feeController.MAX_FEE_BPS() + 1, type(uint256).max);
+    uint256 maxBps = feeController.MAX_FEE_BPS();
+    newFeeBps = bound(newFeeBps, maxBps + 1, type(uint256).max);
     vm.prank(owner);
-    vm.expectRevert(IFeeController.FeeTooHigh.selector);
+    vm.expectRevert(abi.encodeWithSelector(IFeeController.FeeTooHigh.selector, newFeeBps, maxBps));
     feeController.setFeeBps(newFeeBps);
   }
 }
