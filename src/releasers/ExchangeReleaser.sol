@@ -75,7 +75,9 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     if (fee > 0) resource.safeTransferFrom(msg.sender, feeRecipient, fee);
 
     TOKEN_JAR.release(assets, recipient);
-    emit Released(_nonce, recipient, assets);
+    emit Released(
+      _nonce, recipient, address(resource), resourceRecipient, threshold, fee, feeRecipient, assets
+    );
 
     _afterRelease(assets, recipient);
   }

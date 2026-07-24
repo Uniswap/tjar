@@ -35,9 +35,18 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), INITIAL_TOKEN_AMOUNT);
 
-    // Expect the Released event
-    vm.expectEmit(true, true, false, true, address(releaser));
-    emit IReleaser.Released(releaser.nonce(), alice, releaseMockToken);
+    // Expect the Released event (no fee configured, so fee is 0)
+    vm.expectEmit(true, true, true, true, address(releaser));
+    emit IReleaser.Released(
+      releaser.nonce(),
+      alice,
+      address(resource),
+      recipient,
+      releaser.threshold(),
+      0,
+      protocolFeeRecipient,
+      releaseMockToken
+    );
 
     releaser.release(releaser.nonce(), releaseMockToken, alice, type(uint256).max);
 
@@ -56,9 +65,18 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), INITIAL_TOKEN_AMOUNT);
 
-    // Expect the Released event
-    vm.expectEmit(true, true, false, true, address(releaser));
-    emit IReleaser.Released(releaser.nonce(), alice, releaseMockNative);
+    // Expect the Released event (no fee configured, so fee is 0)
+    vm.expectEmit(true, true, true, true, address(releaser));
+    emit IReleaser.Released(
+      releaser.nonce(),
+      alice,
+      address(resource),
+      recipient,
+      releaser.threshold(),
+      0,
+      protocolFeeRecipient,
+      releaseMockNative
+    );
 
     releaser.release(releaser.nonce(), releaseMockNative, alice, type(uint256).max);
 
@@ -148,6 +166,44 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     assertEq(resource.balanceOf(alice), 0);
     assertEq(resource.balanceOf(recipient), releaser.threshold());
     assertEq(resource.balanceOf(protocolFeeRecipient), fee);
+  }
+
+  /// @dev the Released event carries the live economic terms, so a partner can attribute
+  /// revenue per release even after rotating the resource and threshold — the headline reason
+  /// the event is enriched
+  function test_release_event_carriesTermsAfterRotation() public {
+    uint256 feeBps = 500;
+    uint256 newThreshold = 100e18;
+    uint256 fee = newThreshold * feeBps / releaser.BPS_DENOMINATOR();
+
+    vm.prank(owner);
+    feeController.setFeeBps(feeBps);
+
+    // rotate to a different resource and threshold
+    vm.prank(configSetter);
+    releaser.setConfig(address(mockToken1), recipient, newThreshold, 20);
+
+    mockToken1.mint(alice, newThreshold + fee);
+    uint256 nonce = releaser.nonce();
+
+    vm.startPrank(alice);
+    mockToken1.approve(address(releaser), type(uint256).max);
+
+    // the event reflects the NEW resource/threshold and the live fee, not the old config
+    vm.expectEmit(true, true, true, true, address(releaser));
+    emit IReleaser.Released(
+      nonce,
+      alice,
+      address(mockToken1),
+      recipient,
+      newThreshold,
+      fee,
+      protocolFeeRecipient,
+      releaseMockToken
+    );
+
+    releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
+    vm.stopPrank();
   }
 
   /// @dev the fee is read from the controller at release time, so an update between two
@@ -272,9 +328,18 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
 
-    // First release call - expect the Released event
-    vm.expectEmit(true, true, false, true, address(releaser));
-    emit IReleaser.Released(nonce, alice, releaseMockToken);
+    // First release call - expect the Released event (no fee configured, so fee is 0)
+    vm.expectEmit(true, true, true, true, address(releaser));
+    emit IReleaser.Released(
+      nonce,
+      alice,
+      address(resource),
+      recipient,
+      releaser.threshold(),
+      0,
+      protocolFeeRecipient,
+      releaseMockToken
+    );
 
     releaser.release(nonce, releaseMockToken, alice, type(uint256).max);
     assertEq(mockToken.balanceOf(alice), INITIAL_TOKEN_AMOUNT);

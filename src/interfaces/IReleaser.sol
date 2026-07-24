@@ -26,10 +26,27 @@ interface IReleaser is IResourceManager, INonce {
   /// @param maxFee The caller-supplied maximum
   error FeeExceedsMax(uint256 fee, uint256 maxFee);
 
-  /// @notice Emitted on every release with the caller-requested asset list
-  /// @dev `assets` is the requested (superset) list — zero-balance entries transfer nothing.
-  /// Reconstruct actual outflows from the assets' own Transfer logs, not from this event
-  event Released(uint256 indexed nonce, address indexed recipient, Currency[] assets);
+  /// @notice Emitted on every release with the full economic terms, so a partner can attribute
+  /// revenue per release — even across resource/threshold rotations — without joining ConfigSet
+  /// @param nonce The release nonce
+  /// @param recipient The address the jar assets were released to
+  /// @param resource The resource token paid for this release
+  /// @param resourceRecipient The address that received the `threshold` payment
+  /// @param threshold The resource amount paid to `resourceRecipient`
+  /// @param fee The protocol fee paid on top, in `resource` (0 when no fee is configured)
+  /// @param feeRecipient The address that received the protocol `fee`
+  /// @param assets The requested (superset) asset list — zero-balance entries transfer nothing;
+  /// reconstruct actual asset outflows from the assets' own Transfer logs, not from this list
+  event Released(
+    uint256 indexed nonce,
+    address indexed recipient,
+    address indexed resource,
+    address resourceRecipient,
+    uint256 threshold,
+    uint256 fee,
+    address feeRecipient,
+    Currency[] assets
+  );
 
   /// @return Address of the Token Jar contract that will release the assets
   function TOKEN_JAR() external view returns (ITokenJar);
