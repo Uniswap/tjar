@@ -463,7 +463,9 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     uint256 nonce = releaser.nonce();
 
-    vm.expectRevert(IReleaser.TooManyAssets.selector);
+    vm.expectRevert(
+      abi.encodeWithSelector(IReleaser.TooManyAssets.selector, 21, releaser.maxReleaseLength())
+    );
     releaser.release(nonce, assets, alice, type(uint256).max);
   }
 
@@ -672,7 +674,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
     uint256 nonce = releaser.nonce();
-    vm.expectRevert(IReleaser.TooManyAssets.selector);
+    vm.expectRevert(abi.encodeWithSelector(IReleaser.TooManyAssets.selector, 3, 2));
     releaser.release(nonce, assets, alice, type(uint256).max);
     vm.stopPrank();
 

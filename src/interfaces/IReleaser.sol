@@ -8,8 +8,10 @@ import {IResourceManager} from "./base/IResourceManager.sol";
 import {INonce} from "./base/INonce.sol";
 
 interface IReleaser is IResourceManager, INonce {
-  /// @notice Thrown when attempting to release too many assets at once
-  error TooManyAssets();
+  /// @notice Thrown when attempting to release more assets than the configured limit
+  /// @param count The number of assets requested
+  /// @param max The current maxReleaseLength
+  error TooManyAssets(uint256 count, uint256 max);
 
   /// @notice Thrown when constructing with a zero-address token jar
   error InvalidTokenJar();

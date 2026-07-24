@@ -66,7 +66,7 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     handleNonce(_nonce)
   {
     require(recipient != address(0), InvalidRecipient());
-    require(assets.length <= maxReleaseLength, TooManyAssets());
+    require(assets.length <= maxReleaseLength, TooManyAssets(assets.length, maxReleaseLength));
     resource.safeTransferFrom(msg.sender, resourceRecipient, threshold);
 
     (uint256 feeBps, address feeRecipient) = FEE_CONTROLLER.feeConfig();
