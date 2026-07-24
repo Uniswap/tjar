@@ -15,7 +15,7 @@ interface ITokenJar {
   /// @notice Emitted when the releaser is set or rotated
   /// @param oldReleaser The previous releaser address
   /// @param newReleaser The new releaser address
-  event ReleaserRotated(address indexed oldReleaser, address indexed newReleaser);
+  event ReleaserSet(address indexed oldReleaser, address indexed newReleaser);
 
   /// @return Address of the current IReleaser
   /// @dev The releaser has exclusive access to the `release()` function

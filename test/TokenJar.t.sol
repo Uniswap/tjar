@@ -170,11 +170,11 @@ contract TokenJarTest is Test {
     assertEq(tokenJar.releaser(), address(mockReleaser));
   }
 
-  function test_setReleaser_EmitsReleaserRotated() public {
+  function test_setReleaser_EmitsReleaserSet() public {
     MockReleaser newReleaser = new MockReleaser(payable(address(tokenJar)));
 
     vm.expectEmit(true, true, false, true, address(tokenJar));
-    emit ITokenJar.ReleaserRotated(address(mockReleaser), address(newReleaser));
+    emit ITokenJar.ReleaserSet(address(mockReleaser), address(newReleaser));
 
     vm.prank(owner);
     tokenJar.setReleaser(address(newReleaser));

@@ -103,7 +103,7 @@ A partner can move their jar to a new releaser (new terms, new config, or a spec
 1. `factory.deployReleaser(jar, revenueToken, revenueRecipient, threshold, owner, configSetter, salt)` — deploys a fresh releaser pointed at the existing jar, owned by `owner`. It is **inert until adopted**: anyone can deploy a releaser at any jar, but an unadopted releaser cannot move a single asset.
 2. `jar.setReleaser(newReleaser)` — the jar owner adopts it. When the admin is a Safe, both steps batch into one atomic transaction.
 
-The Factory deliberately has **no power to redirect a jar** — `setReleaser` belongs solely to the jar owner, which keeps "the Factory retains no authority" true forever and jar ownership the system's only trust anchor. Once a rotation lands, a pending release against the old releaser reverts atomically (the jar rejects it before any asset moves), searchers re-simulate on the jar's `ReleaserRotated` event, and the old releaser is harmlessly orphaned.
+The Factory deliberately has **no power to redirect a jar** — `setReleaser` belongs solely to the jar owner, which keeps "the Factory retains no authority" true forever and jar ownership the system's only trust anchor. Once a rotation lands, a pending release against the old releaser reverts atomically (the jar rejects it before any asset moves), searchers re-simulate on the jar's `ReleaserSet` event, and the old releaser is harmlessly orphaned.
 
 ### Base & interfaces
 

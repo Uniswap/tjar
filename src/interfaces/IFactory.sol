@@ -89,7 +89,7 @@ interface IFactory {
   /// calls `jar.setReleaser(newReleaser)` (atomic when the jar owner is a Safe). The Factory
   /// deliberately has no power to redirect a jar itself. Once rotation lands, a pending
   /// release against the old releaser reverts atomically inside `jar.release`; searchers
-  /// re-simulate on `ReleaserRotated` and the old releaser is harmlessly orphaned.
+  /// re-simulate on `ReleaserSet` and the old releaser is harmlessly orphaned.
   /// Role semantics match deploy(): zero configSetter leaves the role unset; zero owner
   /// reverts (use 0xdead to relinquish).
   /// @param jar The existing TokenJar the releaser should release from
