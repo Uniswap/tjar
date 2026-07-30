@@ -1,0 +1,67 @@
+name: 'Install review-cli'
+description: 'Set up Bun and install @uniswap/review-cli from GitHub Packages into an isolated $RUNNER_TEMP directory.'
+
+# Mirrors the equivalent composite action in Uniswap/backend so the two
+# repos stay diffable. Used by both jobs in
+# .github/workflows/review.yml.
+
+inputs:
+  version:
+    description: '@uniswap/review-cli version to install. Pin via vars.REVIEW_CLI_VERSION at the call site.'
+    required: true
+  github-token:
+    description: 'Token with packages:read scope. Typically secrets.GITHUB_TOKEN.'
+    required: true
+  bun-version:
+    description: "Bun runtime version. Must satisfy @uniswap/review-cli engines (>=1.3.13)."
+    default: '1.3.13'
+
+outputs:
+  bin-path:
+    description: 'Absolute path to the directory containing the review-cli binary. Callers should invoke "${bin-path}/review-cli" rather than relying on $PATH.'
+    value: ${{ steps.install.outputs.bin-path }}
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    # review-cli is published only to GitHub Packages, so the @uniswap
+    # scope has to be routed there. Bun supports per-SCOPE registry
+    # overrides but not per-package, so rather than add a root
+    # bunfig.toml to this repo (which would redirect every future
+    # @uniswap dependency), install from a scratch directory that
+    # carries its own bunfig. review-cli's transitive deps have no
+    # @uniswap scope and resolve from npmjs.org as normal.
+    #
+    # BUN_CONFIG_FILE is set explicitly to the scratch bunfig rather
+    # than relying on CWD auto-discovery. Two reasons: the review job
+    # sets BUN_CONFIG_FILE=/dev/null on the steps that run inside the
+    # PR checkout, and an explicit path is immune to that; and it means
+    # this install cannot be influenced by a bunfig.toml appearing
+    # anywhere in the checked-out tree.
+    #
+    # Bin path is returned as a step output rather than appended to
+    # GITHUB_PATH — writing PATH creates the implicit cross-step
+    # dependency zizmor flags as `github-env`.
+    - name: Install @uniswap/review-cli (isolated registry context)
+      id: install
+      shell: bash
+      env:
+        GH_PACKAGES_TOKEN: ${{ inputs.github-token }}
+        REVIEW_CLI_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        install_dir="$RUNNER_TEMP/review-cli-install"
+        mkdir -p "$install_dir"
+        cat > "$install_dir/bunfig.toml" <<EOF
+        [install.scopes]
+        "@uniswap" = { url = "https://npm.pkg.github.com", token = "$GH_PACKAGES_TOKEN" }
+        EOF
+        cd "$install_dir"
+        export BUN_CONFIG_FILE="$install_dir/bunfig.toml"
+        bun init -y > /dev/null
+        bun add "@uniswap/review-cli@${REVIEW_CLI_VERSION}"
+        echo "bin-path=$install_dir/node_modules/.bin" >> "$GITHUB_OUTPUT"
