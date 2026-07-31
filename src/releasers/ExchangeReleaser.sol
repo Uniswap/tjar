@@ -5,6 +5,7 @@ import {Currency} from "v4-core/types/Currency.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 import {ResourceManager} from "../base/ResourceManager.sol";
+import {ReentrancyGuard} from "../base/ReentrancyGuard.sol";
 import {ITokenJar} from "../interfaces/ITokenJar.sol";
 import {IFeeController} from "../interfaces/IFeeController.sol";
 import {IReleaser} from "../interfaces/IReleaser.sol";
@@ -21,7 +22,7 @@ import {IReleaser} from "../interfaces/IReleaser.sol";
 /// TokenJar can also cause the exchange to be extra profitable for the release caller. Future
 /// versions may consider dynamic thresholds or other MEV minimizing auction techniques
 /// @custom:security-contact security@uniswap.org
-contract ExchangeReleaser is IReleaser, ResourceManager {
+contract ExchangeReleaser is IReleaser, ResourceManager, ReentrancyGuard {
   using SafeTransferLib for ERC20;
 
   /// @notice Denominator for protocol fee basis points
@@ -59,10 +60,11 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
   /// @dev The caller pays `threshold` to the resource recipient, plus a protocol fee of
   /// `threshold * feeBps / BPS_DENOMINATOR` (bounded by `maxFee`) to the protocol fee
   /// recipient. The fee transfer is skipped entirely when the fee rounds to zero
-  /// @dev The nonce bump and threshold debit precede the jar
-  /// sweep, so a reentrant release pays another full threshold.
+  /// @dev The jar sweep calls out to each listed asset, so `release` is nonReentrant here and
+  /// on `TokenJar.release`
   function release(uint256 _nonce, Currency[] calldata assets, address recipient, uint256 maxFee)
     external
+    nonReentrant
     handleNonce(_nonce)
   {
     require(recipient != address(0), InvalidRecipient());
