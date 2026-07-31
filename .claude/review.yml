@@ -1,0 +1,102 @@
+# review-cli config for Uniswap/tjar.
+# Schema reference: packages/review-cli/src/config.ts in Uniswap/internal-tools.
+#
+# tjar is a Foundry Solidity repo: immutable fee-collection contracts
+# deployed to mainnet and Unichain, released by permissionless searcher
+# calls. The engineering context every reviewer reads lives in
+# .claude/review-context.md, not here.
+
+# ─── Post Policy ───────────────────────────────────
+# Only CI may write to GitHub. Without this, any local `gh` token with
+# repo scope could post a review into a teammate's PR.
+post:
+  allowed_actors:
+    - github-actions
+    - github-actions[bot]
+
+# ─── Model ─────────────────────────────────────────
+# Opus for every reviewer. The bundled agents declare `model: sonnet` in
+# frontmatter, which resolve-model treats as "unpinned", so this default
+# is what actually selects the model. Deployed immutable contracts
+# holding protocol fees justify the most capable reviewer available —
+# a missed finding here is not a bug report, it is a redeploy plus a
+# governance action.
+#
+# Uniswap/universe additionally pins a separate `synthesis:` model; left
+# unset here so synthesis inherits the same default.
+model:
+  default: claude-opus-5
+
+# ─── Budget ────────────────────────────────────────
+# Well above the $5/$2 defaults. This is a small codebase but a
+# high-consequence one — reviewers should be free to read every
+# releaser, base contract, and test rather than stopping early.
+max_budget_usd: 15.0
+agent_budget_usd: 10.0
+
+# Turn ceiling set high so the budget is always the binding cap, never
+# turns.
+agent_max_turns: 500
+
+# ─── Limits ────────────────────────────────────────
+# Review every PR regardless of size. A one-line change to a threshold,
+# a nonce check, or an asset loop is exactly the kind of diff that is
+# both tiny and load-bearing here.
+trivial_threshold: 0
+
+# ─── Investigation Gate ────────────────────────────
+# An empty-findings APPROVE must be backed by evidence that the
+# reviewers actually opened the changed files. Raised above the defaults
+# (0.25 standard / 0.5 thorough) because "looks fine" is not an
+# acceptable review outcome for deployed contract code.
+investigation:
+  min_approve_coverage:
+    light: 0.5
+    standard: 0.75
+    thorough: 0.9
+
+# ─── Triage ────────────────────────────────────────
+# Guidance for the triage agent, which decides which reviewers to staff.
+triage:
+  guidance: |
+    Solidity/Foundry repo — the Uniswap protocol fee collection system.
+    Immutable contracts already deployed to Ethereum mainnet and
+    Unichain, audited by Cantina and OpenZeppelin (see audit/). There is
+    no upgrade path: a bug shipped here is fixed by redeploying and
+    re-pointing governance, not by a patch release. Bias toward staffing
+    more reviewers rather than fewer.
+
+    Always staff contract-security-reviewer and defi-risk-reviewer on any
+    change under src/. Both are the point of this repo, not optional
+    extras:
+
+    - contract-security-reviewer owns the EVM-level surface: access
+      control on the `releaser` / `owner` / `thresholdSetter` roles,
+      reentrancy through `Currency.transfer` and the `_afterRelease`
+      hook, hostile-ERC20 behavior (reverting, gas-griefing, and
+      revert-bomb tokens all have dedicated mocks under test/mocks/),
+      and the external call into the OP Stack L2StandardBridge.
+
+    - defi-risk-reviewer owns the economic surface: the fixed-threshold
+      exchange is deliberately a searcher race, so any change to
+      `threshold`, `MAX_RELEASE_LENGTH`, the nonce sequencing, or the
+      set of released assets changes who profits and by how much.
+      ExchangeReleaser's own docstring flags unresolved MEV
+      considerations — treat that as an open risk area, not settled.
+
+    Add correctness-reviewer on non-trivial logic changes, especially
+    anything touching the asset loop, nonce arithmetic, or the two-stage
+    bridge sequencing where a revert in stage 2 unwinds stage 1.
+
+    Add security-reviewer for CI/workflow changes under .github/ and for
+    anything handling secrets or tokens. Skip it for pure Solidity diffs
+    — contract-security-reviewer covers that surface better.
+
+    Add patterns-reviewer only on larger refactors. This codebase is
+    small and deliberately minimal; structural advice on a 45-line
+    contract is usually noise.
+
+    Documentation-only diffs (README.md, vocs/, audit/) usually warrant
+    general-reviewer alone — but the README documents live deployed
+    addresses and burn mechanics, so verify claims against src/ rather
+    than approving prose on sight.
