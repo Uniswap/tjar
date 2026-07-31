@@ -35,12 +35,23 @@ jobs:
       !contains(github.head_ref, 'release/') &&
       !startsWith(github.event.pull_request.title, 'chore(release):')
 
-    uses: Uniswap/ai-toolkit/.github/workflows/_generate-pr-metadata.yml@9aa3cf98744a2b4e1aac51cd2d26144ea337ab3b
+    uses: Uniswap/ai-toolkit/.github/workflows/_generate-pr-metadata.yml@3c3b90cd08c3ae3e03e49f9e61d425e5461071e8
     with:
       generation_mode: "description,deferred-title"
       pr_number: ${{ github.event.pull_request.number }}
       base_ref: ${{ github.base_ref }}
       commit_history_count: 30
       pr_history_count: 10
+      # Pin the ref used to download the validate-claude-auth action to the
+      # same commit as the workflow itself. The input defaults to the
+      # floating "main", which would let that action's content change
+      # underneath a pinned workflow.
+      toolkit_ref: 3c3b90cd08c3ae3e03e49f9e61d425e5461071e8
     secrets:
+      # Forward both credentials. The reusable workflow treats each as
+      # optional and requires at least one; CLAUDE_CODE_OAUTH_TOKEN takes
+      # precedence when both are set. A reusable workflow only receives the
+      # secrets listed here, so omitting one means the callee sees it as
+      # empty no matter what is configured on the repo.
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
