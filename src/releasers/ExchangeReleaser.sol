@@ -89,12 +89,15 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     total = threshold + fee;
   }
 
-  /// @notice Rejects a resource recipient equal to the token jar
-  /// @dev Such a config lets a release caller list the resource among `assets` and reclaim the
-  /// threshold payment in the same call, draining the jar for the cost of the protocol fee
-  /// alone. Guards the setConfig path (TOKEN_JAR is assigned by then). The constructor guards
+  /// @notice Rejects a resource recipient equal to the token jar or to this releaser
+  /// @dev A jar recipient lets a release caller list the resource among `assets` and reclaim
+  /// the threshold payment in the same call, draining the jar for the cost of the protocol fee
+  /// alone. Guards the setConfig path (TOKEN_JAR is assigned by then); the constructor guards
   /// the deploy path separately, since TOKEN_JAR is still unset when the base constructor runs
-  /// this hook.
+  /// this hook. A recipient equal to this releaser strands each threshold payment: the base
+  /// releaser exposes no way to move its own balance. Only the bridged variant — which replaces
+  /// this override entirely — pins the recipient to itself. address(this) IS available while
+  /// the base constructor runs the hook, so this check needs no constructor duplicate.
   function _validateConfig(address, address _resourceRecipient, uint256, uint256)
     internal
     view
@@ -102,6 +105,7 @@ contract ExchangeReleaser is IReleaser, ResourceManager {
     override
   {
     require(_resourceRecipient != address(TOKEN_JAR), InvalidConfig());
+    require(_resourceRecipient != address(this), InvalidConfig());
   }
 
   /// @notice Internal function to handle any post transfer actions

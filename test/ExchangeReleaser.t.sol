@@ -579,6 +579,25 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     releaser.setConfig(address(resource), address(tokenJar), 42, 20);
   }
 
+  /// @dev the base releaser must never be its own resource recipient: it exposes no way to move
+  /// its own balance, so each release would strand the threshold in the releaser. Rejected by
+  /// the _validateConfig override on the deploy path too — unlike TOKEN_JAR, address(this) is
+  /// available while the base constructor runs the hook
+  function test_revert_constructor_recipientIsReleaser() public {
+    address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)));
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    new ExchangeReleaser(
+      address(resource), INITIAL_TOKEN_AMOUNT, address(tokenJar), predicted, address(feeController)
+    );
+  }
+
+  /// @dev the same invariant is enforced on the setConfig path
+  function test_revert_setConfig_recipientIsReleaser() public {
+    vm.prank(configSetter);
+    vm.expectRevert(IResourceManager.InvalidConfig.selector);
+    releaser.setConfig(address(resource), address(releaser), 42, 20);
+  }
+
   function test_revert_setConfig_validation() public {
     vm.startPrank(configSetter);
 
