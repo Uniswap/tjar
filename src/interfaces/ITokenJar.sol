@@ -22,10 +22,14 @@ interface ITokenJar {
   function releaser() external view returns (address);
 
   /// @notice Set the address of the IReleaser contract
-  /// @dev only callabe by `owner`
+  /// @dev only callable by `owner`
+  /// @param _releaser The address of the new releaser contract
   function setReleaser(address _releaser) external;
 
   /// @notice Release assets to a specified recipient
   /// @dev only callable by `releaser`
+  /// @param assets The list of assets to release; native tokens (Ether) are represented as the
+  /// zero address
+  /// @param recipient The address that receives the released assets
   function release(Currency[] calldata assets, address recipient) external;
 }
