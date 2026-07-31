@@ -46,5 +46,6 @@ contract TokenJar is Owned, ITokenJar {
     releaser = _releaser;
   }
 
+  /// @notice Accepts native token (Ether) fees
   receive() external payable {}
 }

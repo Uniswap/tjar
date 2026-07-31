@@ -7,6 +7,8 @@ import {IFeeController} from "./IFeeController.sol";
 import {IResourceManager} from "./base/IResourceManager.sol";
 import {INonce} from "./base/INonce.sol";
 
+/// @title Releaser Interface
+/// @notice The interface for exchanging a resource payment for the assets held in the Token Jar
 interface IReleaser is IResourceManager, INonce {
   /// @notice Thrown when attempting to release more assets than the configured limit
   /// @param count The number of assets requested
