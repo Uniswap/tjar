@@ -43,6 +43,14 @@ concurrency:
 # zizmor's excessive-permissions rule. Only the review job needs
 # contents:write, and only for the resolveReviewThread GraphQL mutation.
 
+# Single source for the CLI version, inherited by every step in both jobs.
+# vars.REVIEW_CLI_VERSION is the authoritative pin — set it in repo settings
+# to roll forward without a commit. The fallback matches the version
+# Uniswap/universe currently runs. Defined once here so the two install
+# blocks below cannot drift onto different versions.
+env:
+  REVIEW_CLI_VERSION: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
+
 jobs:
   triage:
     name: Triage
@@ -56,7 +64,7 @@ jobs:
     # credential, so an outside contributor must not be able to trigger
     # it by commenting.
     if: |
-      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
+      (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork) ||
       (github.event_name == 'issue_comment'
         && github.event.issue.pull_request != null
         && contains(github.event.comment.body, '@request-claude-review')
@@ -102,10 +110,6 @@ jobs:
         id: install
         env:
           GH_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # vars.REVIEW_CLI_VERSION is the authoritative pin — set it in repo
-          # settings to roll forward without a commit. The fallback matches the
-          # version Uniswap/universe currently runs.
-          REVIEW_CLI_VERSION: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
         run: |
           set -euo pipefail
           install_dir="$RUNNER_TEMP/review-cli-install"
@@ -214,12 +218,13 @@ jobs:
           esac
           echo "pr_number validated: $PR_NUMBER"
 
-      # Install the CLI with NO repo content on disk — this job performs no
-      # checkout at all, so nothing PR-author-controlled can influence
-      # dependency resolution. (An earlier revision checked out the repo here
-      # to use a local composite action; on `pull_request` events a bare
-      # checkout resolves to `refs/pull/N/merge`, i.e. the PR author's tree,
-      # which defeated the point.)
+      # Install the CLI BEFORE this job's only checkout, so no
+      # PR-author-controlled file is on disk during dependency resolution.
+      # The PR head is checked out further down, after this completes.
+      # (An earlier revision checked out the repo here to use a local
+      # composite action; on `pull_request` events a bare checkout resolves
+      # to `refs/pull/N/merge`, i.e. the PR author's tree, which defeated
+      # the point.)
       #
       # review-cli is published only to GitHub Packages, so the @uniswap scope
       # must be routed there. Bun supports per-scope but not per-package
@@ -235,10 +240,6 @@ jobs:
         id: install
         env:
           GH_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # vars.REVIEW_CLI_VERSION is the authoritative pin — set it in repo
-          # settings to roll forward without a commit. The fallback matches the
-          # version Uniswap/universe currently runs.
-          REVIEW_CLI_VERSION: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
         run: |
           set -euo pipefail
           install_dir="$RUNNER_TEMP/review-cli-install"
