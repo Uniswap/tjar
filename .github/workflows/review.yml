@@ -218,6 +218,31 @@ jobs:
           esac
           echo "pr_number validated: $PR_NUMBER"
 
+      # Fork guard for the comment-trigger path. The job-level `if:` blocks
+      # fork `pull_request` events, but `issue_comment` and
+      # `pull_request_review_comment` payloads carry no head-repo field, so
+      # that condition cannot express this case — and those two events run
+      # the base-ref workflow *with* repository secrets. Without this, a
+      # MEMBER commenting the trigger phrase on a fork PR would reach the
+      # `refs/pull/N/head` checkout below in a job holding contents: write
+      # and the LLM credential, and review-cli reads `.claude/` from the
+      # checked-out tree as agent policy. That is the Cantina #655 shape;
+      # resolve the head repo over the API and fail closed before any fork
+      # content is on disk.
+      - name: Refuse fork PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.triage.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          HEAD_REPO=$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.head.repo.full_name')
+          if [ "$HEAD_REPO" != "$GH_REPO" ]; then
+            echo "::error::Refusing to review a fork PR (head=$HEAD_REPO). Fork code must not run in a job holding repository secrets."
+            exit 1
+          fi
+          echo "same-repo PR confirmed (head=$HEAD_REPO)"
+
       # Install the CLI BEFORE this job's only checkout, so no
       # PR-author-controlled file is on disk during dependency resolution.
       # The PR head is checked out further down, after this completes.
