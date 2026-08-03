@@ -450,7 +450,7 @@ jobs:
           if [ "$OUTCOME" = "success" ]; then
             BODY="✅ **Reviewed** · [view run ↗](${RUN_URL}) · scroll up for the full summary."
           elif [ "$OUTCOME" = "cancelled" ]; then
-            BODY="⏹ **Superseded** · a newer push to this PR started a fresh review, so this one was cancelled · [view run ↗](${RUN_URL})"
+            BODY="⏹ **Cancelled** · this run was cancelled before finishing — most often because a newer push to this PR started a fresh review · [view run ↗](${RUN_URL}) · comment \`@request-claude-review\` if you still need one."
           else
             BODY="⚠ **Review failed** · [view run ↗](${RUN_URL}) · scroll up for the partial state, or comment \`@request-claude-review\` to retry."
           fi
