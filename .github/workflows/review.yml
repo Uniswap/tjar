@@ -222,8 +222,9 @@ jobs:
       #    a bare checkout resolves to `refs/pull/N/merge`, i.e. the PR
       #    author's tree, which defeated the point.)
       # 2. The finalization steps at the bottom of this job (reaction +
-      #    threaded-reply update) run unconditionally (`if: always()`) and
-      #    need `steps.install.outputs.bin` to report a terminal state.
+      #    threaded-reply updates) run on every terminal state (two are
+      #    gated `!cancelled()`, the third `cancelled()`) and need
+      #    `steps.install.outputs.bin` to report that state.
       #    If install ran after "Validate PR number" / "Refuse fork PRs"
       #    and one of those failed first, `steps.install.outputs.bin`
       #    would be empty, those finalization steps would silently no-op
