@@ -36,24 +36,30 @@ interface IResourceManager {
   );
 
   /// @notice The resource token required by parent IReleaser
+  /// @return The resource token
   function resource() external view returns (ERC20);
 
   /// @notice The recipient of the `resource` tokens
+  /// @return The address that receives the `threshold` payment on each release
   function resourceRecipient() external view returns (address);
 
   /// @notice The minimum threshold of `resource` tokens required to perform a release
+  /// @return The amount of `resource` tokens required per release
   function threshold() external view returns (uint256);
 
   /// @notice The maximum number of assets that can be released in a single call
+  /// @return The maximum number of assets per release
   function maxReleaseLength() external view returns (uint256);
 
   /// @notice The address authorized, alongside the owner, to update the release configuration
+  /// @return The config setter address, or address(0) when the role is revoked
   function configSetter() external view returns (address);
 
   /// @notice Set the address authorized to update the release configuration
   /// @dev only callable by `owner`; setting `address(0)` revokes the role (the owner can
   /// always update the config directly). Does NOT bump the release nonce: it changes who may
   /// set terms, not the terms a searcher priced against.
+  /// @param newConfigSetter The new config setter; address(0) revokes the role
   function setConfigSetter(address newConfigSetter) external;
 
   /// @notice Set the full release configuration, atomically

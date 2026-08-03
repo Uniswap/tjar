@@ -8,5 +8,6 @@ interface IOptimismMintableERC20 {
   /// @notice Address of the corresponding token on the remote (L1) chain. Legacy getter — the
   ///         L2StandardBridge's `withdrawTo` dispatches on it, so a token withdrawable through
   ///         the standard bridge must implement it.
+  /// @return The address of the corresponding L1 token
   function l1Token() external view returns (address);
 }
