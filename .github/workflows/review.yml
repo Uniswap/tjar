@@ -401,9 +401,16 @@ jobs:
           overwrite: true
 
       - name: Update reaction (✅ / ❌) on comment trigger
+        # Skipped when the job was CANCELLED. A push to this PR cancels an
+        # in-flight review (see `cancel-in-progress` above), and a cancelled
+        # run is not a failed one — the newer run is already starting.
+        # Leaving the 👀 in place is accurate there; overwriting it with ❌
+        # would tell the commenter their request failed when it was merely
+        # superseded.
         if: |
           always() &&
-          needs.triage.outputs.comment_id != ''
+          needs.triage.outputs.comment_id != '' &&
+          job.status != 'cancelled'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -437,8 +444,13 @@ jobs:
           REVIEW_CLI: ${{ steps.install.outputs.bin }}
           BUN_CONFIG_FILE: /dev/null
         run: |
+          # Three terminal states, not two. `job.status` is one of success /
+          # failure / cancelled, and conflating cancelled with failure tells a
+          # commenter their request broke when a newer push superseded it.
           if [ "$OUTCOME" = "success" ]; then
             BODY="✅ **Reviewed** · [view run ↗](${RUN_URL}) · scroll up for the full summary."
+          elif [ "$OUTCOME" = "cancelled" ]; then
+            BODY="⏹ **Superseded** · a newer push to this PR started a fresh review, so this one was cancelled · [view run ↗](${RUN_URL})"
           else
             BODY="⚠ **Review failed** · [view run ↗](${RUN_URL}) · scroll up for the partial state, or comment \`@request-claude-review\` to retry."
           fi
