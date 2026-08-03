@@ -176,6 +176,7 @@ test
 ├── ExchangeReleaser.t.sol
 ├── Factory.t.sol
 ├── OptimismBridgedResourceReleaser.t.sol
+├── ReentrancyGuard.t.sol               // Transient-storage guard unit tests
 ├── Deploy.t.sol                        // Deployment-path tests (incl. mainnet-fork proxy test)
 ├── mocks/                              // mock tokens and releasers
 └── utils/                              // shared test base
