@@ -46,7 +46,7 @@ jobs:
       # same commit as the workflow itself. The input defaults to the
       # floating "main", which would let that action's content change
       # underneath a pinned workflow.
-      toolkit_ref: 3c3b90cd08c3ae3e03e49f9e61d425e5461071e8
+      toolkit_ref: 9b405c71e42d0cec4026f2c158edf99716600baa
     secrets:
       # Forward both credentials. The reusable workflow treats each as
       # optional and requires at least one; CLAUDE_CODE_OAUTH_TOKEN takes
