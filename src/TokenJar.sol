@@ -3,6 +3,7 @@ pragma solidity ^0.8.29;
 
 import {Currency} from "v4-core/types/Currency.sol";
 import {Owned} from "solmate/src/auth/Owned.sol";
+import {ReentrancyGuard} from "./base/ReentrancyGuard.sol";
 import {ITokenJar} from "./interfaces/ITokenJar.sol";
 
 /// @title TokenJar
@@ -10,7 +11,7 @@ import {ITokenJar} from "./interfaces/ITokenJar.sol";
 /// @dev Fees accumulate passively in this contract from external sources.
 ///      Stored fees can be released by an authorized releaser contract.
 /// @custom:security-contact security@uniswap.org
-contract TokenJar is Owned, ITokenJar {
+contract TokenJar is Owned, ReentrancyGuard, ITokenJar {
   /// @inheritdoc ITokenJar
   address public releaser;
 
@@ -26,10 +27,15 @@ contract TokenJar is Owned, ITokenJar {
   constructor() Owned(msg.sender) {}
 
   /// @inheritdoc ITokenJar
-  /// @dev The balance read and `amount > 0` gate are load-bearing, not gas trims:
-  /// `Currency.transfer` treats a no-code target as success, and `balanceOfSelf` reverting on
-  /// codeless assets is what rejects them.
-  function release(Currency[] calldata assets, address recipient) external onlyReleaser {
+  /// @dev The sweep calls out to each listed asset, so it is guarded here — at the custody
+  /// boundary — independent of the releaser. The balance read and `amount > 0` gate are
+  /// load-bearing: `Currency.transfer` treats a no-code target as success, and `balanceOfSelf`
+  /// reverting on codeless assets is what rejects them.
+  function release(Currency[] calldata assets, address recipient)
+    external
+    onlyReleaser
+    nonReentrant
+  {
     Currency asset;
     uint256 amount;
     for (uint256 i; i < assets.length; i++) {

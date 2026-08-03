@@ -364,9 +364,9 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
   }
 
   /// @dev reentrancy is third-party reachable: anyone can donate a malicious token to the jar
-  /// and list it in the caller-supplied `assets[]`, so its transfer runs mid-sweep. Reusing the
-  /// ORIGINAL nonce in the reentrant call reverts — handleNonce bumps before the body, so the
-  /// nonce no longer matches — and the revert unwinds the whole outer release. Nothing moves.
+  /// and list it in the caller-supplied `assets[]`, so its transfer runs mid-sweep. The
+  /// reentrant call reverts on the nonReentrant guard regardless of the nonce it carries, and
+  /// the revert unwinds the whole outer release. Nothing moves.
   function test_revert_release_reentrantStaleNonce() public {
     ReentrantJarToken reentrant = new ReentrantJarToken("Reentrant", "RE", 18);
     reentrant.mint(address(tokenJar), 1e18);
@@ -382,9 +382,9 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
-    // the reentrant call reverts with InvalidNonce; CurrencyLibrary.transfer re-wraps any
-    // sweep-time token revert, so the outer failure is a wrapped error rather than the raw
-    // selector — the meaningful proof is that the whole release unwound (asserted below)
+    // the reentrant call reverts on the guard; CurrencyLibrary.transfer re-wraps any sweep-time
+    // token revert, so the outer failure is a wrapped error rather than the raw selector — the
+    // meaningful proof is that the whole release unwound (asserted below)
     vm.expectRevert();
     releaser.release(nonce, assets, alice, type(uint256).max);
     vm.stopPrank();
@@ -396,19 +396,16 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     assertEq(releaser.nonce(), nonce);
   }
 
-  /// @dev even with the correctly bumped nonce, a mid-sweep reentrant release cannot double-claim
-  /// the jar and is strictly unprofitable: each release invocation pays a full threshold BEFORE
-  /// it can sweep, and the jar pays each asset against its live balance. Here the reentrant call
-  /// drains mockToken to an attacker, but it cost a second full threshold, and the outer call's
-  /// listing of mockToken then sweeps nothing (balance already zero). This is the invariant the
-  /// natspec on release() pins.
-  function test_release_reentrantFreshNonceUnprofitable() public {
+  /// @dev a mid-sweep reentrant release — even with the correctly bumped nonce — reverts on
+  /// the nonReentrant guard, and the revert unwinds the whole outer release. Without the guard
+  /// this path would grief the searcher out of the threshold and fee while the attacker
+  /// captured the jar; instead the searcher's release simply reverts and nothing moves.
+  function test_revert_release_reentrantFreshNonce() public {
     address attacker = makeAddr("ATTACKER");
     ReentrantJarToken reentrant = new ReentrantJarToken("Reentrant", "RE", 18);
-    uint256 jarReentrantAmount = 1e18;
-    reentrant.mint(address(tokenJar), jarReentrantAmount);
+    reentrant.mint(address(tokenJar), 1e18);
 
-    // the malicious token must itself hold + approve a full threshold to fund its reentrant pull
+    // fund the malicious token so its reentrant pull would succeed if the guard were absent
     resource.mint(address(reentrant), releaser.threshold());
     vm.prank(address(reentrant));
     resource.approve(address(releaser), type(uint256).max);
@@ -416,7 +413,7 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
     uint256 nonce = releaser.nonce();
     Currency[] memory reentryAssets = new Currency[](1);
     reentryAssets[0] = Currency.wrap(address(mockToken));
-    // reenter at the bumped nonce, draining mockToken to the attacker
+    // reenter at the bumped nonce, attempting to drain mockToken to the attacker
     reentrant.arm(IReleaser(address(releaser)), nonce + 1, reentryAssets, attacker);
 
     // alice lists [reentrant, mockToken]: the reentry fires while reentrant is swept (i=0)
@@ -426,23 +423,18 @@ contract ExchangeReleaserTest is ProtocolFeesTestBase {
 
     vm.startPrank(alice);
     resource.approve(address(releaser), type(uint256).max);
+    // the reentrant call reverts on the guard; CurrencyLibrary re-wraps the sweep-time revert
+    vm.expectRevert();
     releaser.release(nonce, assets, alice, type(uint256).max);
     vm.stopPrank();
 
-    // mockToken left the jar exactly once — to the attacker's reentrant call, not twice
-    assertEq(mockToken.balanceOf(attacker), INITIAL_TOKEN_AMOUNT);
+    // nothing moved: jar intact, searcher uncharged, attacker empty-handed, nonce unchanged
+    assertEq(mockToken.balanceOf(address(tokenJar)), INITIAL_TOKEN_AMOUNT);
+    assertEq(mockToken.balanceOf(attacker), 0);
     assertEq(mockToken.balanceOf(alice), 0);
-    assertEq(mockToken.balanceOf(address(tokenJar)), 0);
-    // alice got only the (worthless) reentrant token she listed
-    assertEq(reentrant.balanceOf(alice), jarReentrantAmount);
-
-    // the attack cost TWO full thresholds: alice's and the malicious token's
-    assertEq(resource.balanceOf(recipient), releaser.threshold() * 2);
-    assertEq(resource.balanceOf(alice), 0);
-    assertEq(resource.balanceOf(address(reentrant)), 0);
-
-    // both invocations advanced the nonce
-    assertEq(releaser.nonce(), nonce + 2);
+    assertEq(resource.balanceOf(alice), INITIAL_TOKEN_AMOUNT);
+    assertEq(resource.balanceOf(recipient), 0);
+    assertEq(releaser.nonce(), nonce);
   }
 
   /// @dev a zero recipient would irreversibly burn the released assets — 0xdead is the burn
