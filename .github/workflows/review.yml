@@ -412,11 +412,11 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      - name: Update reaction (✅ / ❌) on comment trigger
+      - name: Update reaction (👍 / 👎) on comment trigger
         # `!cancelled()` runs on success and failure but not cancellation,
         # which is what we want: a cancelled run is not a failed one, so
         # leaving the 👀 in place is accurate rather than overwriting it with
-        # ❌ and telling the commenter their request broke.
+        # 👎 and telling the commenter their request broke.
         #
         # Gated by the status-check function, NOT by comparing `job.status`
         # in bash. `job.status` is documented to be one of success / failure
