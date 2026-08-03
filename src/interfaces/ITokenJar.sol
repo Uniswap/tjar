@@ -9,6 +9,14 @@ interface ITokenJar {
   /// @notice Thrown when an unauthorized address attempts to call a restricted function
   error Unauthorized();
 
+  /// @notice Thrown when attempting to set the releaser to the zero address
+  error InvalidReleaser();
+
+  /// @notice Emitted when the releaser is set or rotated
+  /// @param oldReleaser The previous releaser address
+  /// @param newReleaser The new releaser address
+  event ReleaserSet(address indexed oldReleaser, address indexed newReleaser);
+
   /// @return Address of the current IReleaser
   /// @dev The releaser has exclusive access to the `release()` function
   function releaser() external view returns (address);

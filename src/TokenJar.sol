@@ -26,6 +26,9 @@ contract TokenJar is Owned, ITokenJar {
   constructor() Owned(msg.sender) {}
 
   /// @inheritdoc ITokenJar
+  /// @dev The balance read and `amount > 0` gate are load-bearing, not gas trims:
+  /// `Currency.transfer` treats a no-code target as success, and `balanceOfSelf` reverting on
+  /// codeless assets is what rejects them.
   function release(Currency[] calldata assets, address recipient) external onlyReleaser {
     Currency asset;
     uint256 amount;
@@ -38,6 +41,8 @@ contract TokenJar is Owned, ITokenJar {
 
   /// @inheritdoc ITokenJar
   function setReleaser(address _releaser) external onlyOwner {
+    require(_releaser != address(0), InvalidReleaser());
+    emit ReleaserSet(releaser, _releaser);
     releaser = _releaser;
   }
 

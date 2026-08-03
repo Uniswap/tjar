@@ -7,6 +7,3 @@
 [submodule "lib/v4-core"]
 	path = lib/v4-core
 	url = https://github.com/uniswap/v4-core
-[submodule "lib/optimism"]
-	path = lib/optimism
-	url = https://github.com/ethereum-optimism/optimism
