@@ -38,7 +38,8 @@ contract FeeController is Owned, IFeeController {
 
   /// @inheritdoc IFeeController
   function feeConfig() external view returns (uint256 bps, address recipient) {
-    return (feeBps, feeRecipient);
+    bps = feeBps;
+    recipient = feeRecipient;
   }
 
   /// @inheritdoc IFeeController
