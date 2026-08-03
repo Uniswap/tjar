@@ -109,6 +109,7 @@ The Factory deliberately has **no power to redirect a jar** — `setReleaser` be
 
 - [`ResourceManager.sol`](src/base/ResourceManager.sol) — holds the release configuration (`resource`, `resourceRecipient`, `threshold`, `maxReleaseLength`, `configSetter`) and enforces the atomic-`setConfig` + nonce-bump invariants.
 - [`Nonce.sol`](src/base/Nonce.sol) — sequences pending releases to prevent front-running.
+- [`ReentrancyGuard.sol`](src/base/ReentrancyGuard.sol) — transient-storage (EIP-1153) reentrancy guard applied to `release` on both the Token Jar and the Releaser, blocking a malicious jar asset from re-entering mid-sweep.
 - [`src/interfaces/`](src/interfaces/) — [`ITokenJar`](src/interfaces/ITokenJar.sol), [`IReleaser`](src/interfaces/IReleaser.sol), [`IFeeController`](src/interfaces/IFeeController.sol), [`IFactory`](src/interfaces/IFactory.sol), and base interfaces (`IResourceManager`, `INonce`, `IOwned`).
 
 ## Economic Incentives
@@ -151,6 +152,7 @@ src/
 ├── Factory.sol                         // Deploys jar + releaser pairs; hands all authority to the partner
 ├── base
 │   ├── Nonce.sol                       // Sequences pending releases to prevent front-running
+│   ├── ReentrancyGuard.sol             // Transient-storage reentrancy guard for release()
 │   └── ResourceManager.sol             // Atomic release config (setConfig) + nonce-bump invariants
 ├── interfaces
 │   ├── ITokenJar.sol
@@ -158,7 +160,7 @@ src/
 │   ├── IFeeController.sol
 │   ├── IFactory.sol
 │   ├── base/                           // INonce, IOwned, IResourceManager
-│   └── external/IL2StandardBridge.sol  // Vendored OP-stack bridge interface
+│   └── external/                       // Vendored OP-stack interfaces (IL2StandardBridge, IOptimismMintableERC20)
 └── releasers
     ├── ExchangeReleaser.sol            // Concrete: exchange resource for Token Jar assets
     └── OptimismBridgedResourceReleaser.sol // Bridges the collected resource to an L1 recipient
@@ -174,6 +176,7 @@ test
 ├── ExchangeReleaser.t.sol
 ├── Factory.t.sol
 ├── OptimismBridgedResourceReleaser.t.sol
+├── ReentrancyGuard.t.sol               // Transient-storage guard unit tests
 ├── Deploy.t.sol                        // Deployment-path tests (incl. mainnet-fork proxy test)
 ├── mocks/                              // mock tokens and releasers
 └── utils/                              // shared test base
@@ -183,10 +186,11 @@ test
 
 Audit reports are available in [audit/](./audit/):
 
-- OpenZeppelin (`openzeppelin-1.pdf`, `openzeppelin-2.pdf`, `openzeppelin-3.pdf`)
-- Cantina (`cantina.pdf`)
+- **OpenZeppelin — TJAR** ([`openzeppelin-tjar-diff.pdf`](audit/openzeppelin-tjar-diff.pdf)) — audit of the TJAR-specific changes (the diff against upstream: the pruning to TJAR scope plus the protocol fee, factory, atomic config, and bridged-releaser work). All findings have been remediated.
+- **OpenZeppelin — upstream** (`openzeppelin-1.pdf`, `openzeppelin-2.pdf`, `openzeppelin-3.pdf`)
+- **Cantina — upstream** (`cantina.pdf`)
 
-> Note: the audits cover the upstream Uniswap/protocol-fees code from which this repository is derived.
+> The three OpenZeppelin `-1/-2/-3` reports and the Cantina report cover the upstream Uniswap/protocol-fees code this repository is derived from. The **OpenZeppelin TJAR** report covers the changes made on top of it — see the derivative notice at the top of this README for what that diff includes.
 
 ## License
 
