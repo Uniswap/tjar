@@ -18,6 +18,19 @@ Fee Sources → Token Jar → Releaser → (redeemer pays resource) → resource
                                                  └→ optional protocol fee → FeeController.feeRecipient
 ```
 
+## Deployments
+
+The Factory and FeeController are deployed at the same deterministic addresses on the following networks.
+
+| Network | Factory | FeeController |
+| --- | --- | --- |
+| Ethereum | [`0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee`](https://etherscan.io/address/0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee) | [`0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8`](https://etherscan.io/address/0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8) |
+| Optimism | [`0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee`](https://optimistic.etherscan.io/address/0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee) | [`0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8`](https://optimistic.etherscan.io/address/0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8) |
+| Polygon | [`0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee`](https://polygonscan.com/address/0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee) | [`0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8`](https://polygonscan.com/address/0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8) |
+| Base | [`0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee`](https://basescan.org/address/0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee) | [`0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8`](https://basescan.org/address/0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8) |
+| Arbitrum | [`0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee`](https://arbiscan.io/address/0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee) | [`0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8`](https://arbiscan.io/address/0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8) |
+| Robinhood Chain | [`0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee`](https://robinhoodchain.blockscout.com/address/0xfAc70EEEE259F2140CBbB8e3157b75A52ce39fee) | [`0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8`](https://robinhoodchain.blockscout.com/address/0xfEeC0FEE579Be52a5409cd75a42bCc9E6b149EF8) |
+
 ## Architecture
 
 ### Token Jar
