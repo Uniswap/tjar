@@ -60,7 +60,7 @@ concurrency:
 # Uniswap/universe currently runs. Defined once here so the two install
 # blocks below cannot drift onto different versions.
 env:
-  REVIEW_CLI_VERSION: ${{ vars.REVIEW_CLI_VERSION || '1.10.1' }}
+  REVIEW_CLI_VERSION: ${{ vars.REVIEW_CLI_VERSION || '1.10.6' }}
 
 jobs:
   triage:
