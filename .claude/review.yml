@@ -1,8 +1,8 @@
 # review-cli config for Uniswap/tjar.
 # Schema reference: packages/review-cli/src/config.ts in Uniswap/internal-tools.
 #
-# tjar is a Foundry Solidity repo: immutable fee-collection contracts
-# deployed to mainnet and Unichain, released by permissionless searcher
+# tjar is a Foundry Solidity repo: non-upgradeable fee-collection contracts
+# with deterministic singletons on six chains and permissionless release
 # calls. The engineering context every reviewer reads lives in
 # .claude/review-context.md, not here.
 
@@ -60,33 +60,35 @@ investigation:
 triage:
   guidance: |
     Solidity/Foundry repo — the Uniswap protocol fee collection system.
-    Immutable contracts already deployed to Ethereum mainnet and
-    Unichain, audited by Cantina and OpenZeppelin (see audit/). There is
-    no upgrade path: a bug shipped here is fixed by redeploying and
-    re-pointing governance, not by a patch release. Bias toward staffing
-    more reviewers rather than fewer.
+    Non-upgradeable contracts with deterministic Factory and FeeController
+    deployments on Ethereum, Optimism, Polygon, Base, Arbitrum, and
+    Robinhood Chain. The repository includes Cantina and OpenZeppelin
+    reports under audit/. A live-contract fix requires a new deployment
+    and the relevant jar-owner or governance action, not only a source
+    patch. Bias toward staffing more reviewers rather than fewer.
 
     Always staff contract-security-reviewer and defi-risk-reviewer on any
     change under src/. Both are the point of this repo, not optional
     extras:
 
-    - contract-security-reviewer owns the EVM-level surface: access
-      control on the `releaser` / `owner` / `thresholdSetter` roles,
-      reentrancy through `Currency.transfer` and the `_afterRelease`
-      hook, hostile-ERC20 behavior (reverting, gas-griefing, and
-      revert-bomb tokens all have dedicated mocks under test/mocks/),
-      and the external call into the OP Stack L2StandardBridge.
+    - contract-security-reviewer owns the EVM-level surface: jar
+      `owner` / `releaser`, releaser `owner` / `configSetter`, and
+      FeeController `owner` authority; the transient-storage reentrancy
+      guards; hostile-token behavior; nonce invalidation on atomic config
+      updates; Factory CREATE2 salt scoping and authority handoff; and the
+      external call into the OP Stack L2StandardBridge.
 
     - defi-risk-reviewer owns the economic surface: the fixed-threshold
-      exchange is deliberately a searcher race, so any change to
-      `threshold`, `MAX_RELEASE_LENGTH`, the nonce sequencing, or the
-      set of released assets changes who profits and by how much.
-      ExchangeReleaser's own docstring flags unresolved MEV
-      considerations — treat that as an open risk area, not settled.
+      exchange is deliberately a searcher race, so changes to `resource`,
+      `resourceRecipient`, `threshold`, `maxReleaseLength`, protocol-fee
+      calculation, `maxFee`, nonce sequencing, or selected assets change
+      execution terms and profitability. ExchangeReleaser's docstring
+      flags MEV considerations; treat that as an open risk area.
 
     Add correctness-reviewer on non-trivial logic changes, especially
-    anything touching the asset loop, nonce arithmetic, or the two-stage
-    bridge sequencing where a revert in stage 2 unwinds stage 1.
+    anything touching the asset loop, fee rounding, nonce arithmetic,
+    Factory ownership handoff, or the two-stage bridge sequencing where
+    a revert in the bridge hook must unwind collection and the jar sweep.
 
     Add security-reviewer for CI/workflow changes under .github/ and for
     anything handling secrets or tokens. Skip it for pure Solidity diffs
@@ -96,7 +98,7 @@ triage:
     small and deliberately minimal; structural advice on a 45-line
     contract is usually noise.
 
-    Documentation-only diffs (README.md, vocs/, audit/) usually warrant
-    general-reviewer alone — but the README documents live deployed
-    addresses and burn mechanics, so verify claims against src/ rather
-    than approving prose on sight.
+    Documentation-only diffs (README.md, SEARCHERS.md, script/README.md,
+    audit/) usually warrant general-reviewer alone. Deployment addresses,
+    CREATE2 inputs, fee behavior, and operational guidance still need to
+    be checked against the source and live-deployment assumptions.
