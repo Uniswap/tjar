@@ -21,13 +21,16 @@ contract Create2Forwarder {
 }
 
 contract DeployTest is Test {
-  bytes32 internal salt;
+  bytes32 internal feeControllerSalt;
+  bytes32 internal factorySalt;
   address internal opsOwner = makeAddr("OPS_OWNER");
   address internal governance = makeAddr("GOVERNANCE");
   address internal feeRecipient = makeAddr("FEE_RECIPIENT");
 
   function setUp() public {
-    salt = new Deploy().TJAR_SALT();
+    Deploy deploy = new Deploy();
+    feeControllerSalt = keccak256(abi.encode(deploy.FEE_CONTROLLER_SALT(), "test"));
+    factorySalt = keccak256(abi.encode(deploy.FACTORY_SALT(), "test"));
   }
 
   /// @dev the deployment-path regression, runnable without a fork: when the contract creator
@@ -36,7 +39,7 @@ contract DeployTest is Test {
   function test_ownerComesFromArg_notFromCreator() public {
     Create2Forwarder forwarder = new Create2Forwarder();
     address deployed = forwarder.deployWith(
-      salt, abi.encodePacked(type(FeeController).creationCode, abi.encode(opsOwner))
+      feeControllerSalt, abi.encodePacked(type(FeeController).creationCode, abi.encode(opsOwner))
     );
 
     assertEq(FeeController(deployed).owner(), opsOwner);
@@ -55,9 +58,9 @@ contract DeployTest is Test {
     bytes memory feeControllerInitcode =
       abi.encodePacked(type(FeeController).creationCode, abi.encode(opsOwner));
     address predictedFeeController =
-      vm.computeCreate2Address(salt, keccak256(feeControllerInitcode));
+      vm.computeCreate2Address(feeControllerSalt, keccak256(feeControllerInitcode));
 
-    (bool ok,) = CREATE2_FACTORY.call(abi.encodePacked(salt, feeControllerInitcode));
+    (bool ok,) = CREATE2_FACTORY.call(abi.encodePacked(feeControllerSalt, feeControllerInitcode));
     assertTrue(ok, "FeeController deploy through proxy failed");
     assertGt(predictedFeeController.code.length, 0, "predicted FeeController address empty");
     // the msg.sender regression, on the real deployment path
@@ -66,9 +69,9 @@ contract DeployTest is Test {
     // --- Factory through the real proxy, wired to the predicted singleton ---
     bytes memory factoryInitcode =
       abi.encodePacked(type(Factory).creationCode, abi.encode(predictedFeeController));
-    address predictedFactory = vm.computeCreate2Address(salt, keccak256(factoryInitcode));
+    address predictedFactory = vm.computeCreate2Address(factorySalt, keccak256(factoryInitcode));
 
-    (ok,) = CREATE2_FACTORY.call(abi.encodePacked(salt, factoryInitcode));
+    (ok,) = CREATE2_FACTORY.call(abi.encodePacked(factorySalt, factoryInitcode));
     assertTrue(ok, "Factory deploy through proxy failed");
     assertEq(address(Factory(predictedFactory).FEE_CONTROLLER()), predictedFeeController);
 

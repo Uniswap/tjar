@@ -9,7 +9,7 @@ forever. Three things are therefore frozen after the first deployment anywhere:
 
 | Frozen | Where | Why |
 |---|---|---|
-| `TJAR_SALT` | `Deploy.s.sol` constant | part of every CREATE2 address derivation |
+| `FEE_CONTROLLER_SALT`, `FACTORY_SALT` | constants in `Deploy.s.sol` | distinct mined salts used by the production deployments; each is part of its contract's CREATE2 address derivation |
 | Compiler profile | `foundry.toml` (`solc_version`, `optimizer`, `optimizer_runs`, `evm_version`) | different settings → different initcode → different addresses on later chains |
 | `OPS_OWNER` | env var, but the *same value* on every chain | it is a FeeController constructor arg, i.e. part of its initcode |
 
@@ -21,14 +21,14 @@ receives ownership in step 2, and governance addresses are free to differ per ch
 ## 1. Deploy the singletons
 
 ```bash
-OPS_OWNER=0x... forge script script/Deploy.s.sol \
-  --rpc-url <chain> --broadcast --verify
+OPS_OWNER=0x... forge script script/Deploy.s.sol --rpc-url <chain> --broadcast --verify
 ```
 
 Deploys through the canonical CREATE2 deployer
 (`0x4e59b44847b379578588920cA78FbF26c0B4956C`), FeeController first, then the Factory
-wired to it. Prints the (chain-invariant) addresses and reverts if anything lands off
-prediction. Re-running on a chain where the contracts exist is a no-op.
+wired to it, using each contract's mined salt. Prints the (chain-invariant) addresses and
+reverts if anything lands off prediction. Re-running on a chain where the contracts exist
+is a no-op.
 
 Order matters: factory-deployed releasers call `feeConfig()` on every release, so the
 FeeController must exist before any partner deployment — the script enforces this by
