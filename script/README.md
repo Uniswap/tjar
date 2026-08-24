@@ -11,17 +11,17 @@ forever. Three things are therefore frozen after the first deployment anywhere:
 |---|---|---|
 | `FEE_CONTROLLER_SALT`, `FACTORY_SALT` | constants in `Deploy.s.sol` | distinct mined salts used by the production deployments; each is part of its contract's CREATE2 address derivation |
 | Compiler profile | `foundry.toml` (`solc_version`, `optimizer`, `optimizer_runs`, `evm_version`) | different settings → different initcode → different addresses on later chains |
-| `OPS_OWNER` | env var, but the *same value* on every chain | it is a FeeController constructor arg, i.e. part of its initcode |
+| `INITIAL_OPS_OWNER` | constant in `Deploy.s.sol` | it is a FeeController constructor arg, i.e. part of its initcode |
 
-`OPS_OWNER` must be an address you control on **every** chain: an EOA (automatic), or a
-deterministically deployed Safe. It is the *initial operational owner only* — governance
-receives ownership in step 2, and governance addresses are free to differ per chain
-(ownership is storage, not initcode).
+`INITIAL_OPS_OWNER` is pinned to the address used by the production deployments,
+`0x2179a60856E37dfeAacA0ab043B931fE224b27B6`. It is the *initial operational owner
+only* — governance receives ownership in step 2, and governance addresses are free to
+differ per chain (ownership is storage, not initcode).
 
 ## 1. Deploy the singletons
 
 ```bash
-OPS_OWNER=0x... forge script script/Deploy.s.sol --rpc-url <chain> --broadcast --verify
+forge script script/Deploy.s.sol --rpc-url <chain> --broadcast --verify
 ```
 
 Deploys through the canonical CREATE2 deployer
@@ -48,7 +48,7 @@ FEE_CONTROLLER=0x... FEE_RECIPIENT=0x... GOVERNANCE=0x... \
   forge script script/HandoffFeeController.s.sol --rpc-url <chain> --broadcast
 ```
 
-Run as `OPS_OWNER`. Sets the fee recipient (the Uniswap Token Jar — itself
+Run as `INITIAL_OPS_OWNER`. Sets the fee recipient (the Uniswap Token Jar — itself
 chain-invariant) and transfers ownership to this chain's governance executor.
 
 > **Verify `GOVERNANCE` before broadcasting.** It differs per chain — the Timelock on

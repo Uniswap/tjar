@@ -17,27 +17,26 @@ import {Factory} from "../src/Factory.sol";
 ///   2. the compiler profile (solc version + optimizer settings in foundry.toml) — initcode
 ///      must stay byte-identical, so the profile used for the first deployment is pinned for
 ///      all future chains;
-///   3. OPS_OWNER — it is a constructor arg, i.e. part of the FeeController initcode. Use an
-///      address controlled on every chain (an EOA, or a deterministically deployed Safe).
+///   3. INITIAL_OPS_OWNER below — it is a constructor arg, i.e. part of the FeeController
+///      initcode, and must remain controlled on every chain until governance handoff.
 /// The Factory's constructor arg is the predicted FeeController address, which is itself
 /// chain-invariant, keeping the Factory's initcode — and address — chain-invariant too.
 ///
 /// Usage:
-///   OPS_OWNER=0x... forge script script/Deploy.s.sol --rpc-url <chain> --broadcast --verify
+///   forge script script/Deploy.s.sol --rpc-url <chain> --broadcast --verify
 ///
 /// After deploying, run HandoffFeeController.s.sol per chain (see script/README.md).
 contract Deploy is Script {
+  address public constant INITIAL_OPS_OWNER = 0x2179a60856E37dfeAacA0ab043B931fE224b27B6;
   bytes32 public constant FEE_CONTROLLER_SALT =
     0xf8a661d537b79e983ae29ed681edd987f2febd934690d0abcda900e57b28a78e;
   bytes32 public constant FACTORY_SALT =
     0x2179a60856e37dfeaaca0ab043b931fe224b27b69b06e3b62a0dfc02eb0b97aa;
 
   function run() external returns (address feeController, address factory) {
-    address opsOwner = vm.envAddress("OPS_OWNER");
-
     feeController = vm.computeCreate2Address(
       FEE_CONTROLLER_SALT,
-      keccak256(abi.encodePacked(type(FeeController).creationCode, abi.encode(opsOwner)))
+      keccak256(abi.encodePacked(type(FeeController).creationCode, abi.encode(INITIAL_OPS_OWNER)))
     );
     factory = vm.computeCreate2Address(
       FACTORY_SALT,
@@ -47,11 +46,12 @@ contract Deploy is Script {
     vm.startBroadcast();
 
     if (feeController.code.length == 0) {
-      FeeController deployedFeeController = new FeeController{salt: FEE_CONTROLLER_SALT}(opsOwner);
+      FeeController deployedFeeController =
+        new FeeController{salt: FEE_CONTROLLER_SALT}(INITIAL_OPS_OWNER);
       require(address(deployedFeeController) == feeController, "FeeController address mismatch");
       // the regression this guards: through the CREATE2 proxy, msg.sender in the constructor
       // is the proxy — ownership must come from the arg
-      require(deployedFeeController.owner() == opsOwner, "FeeController owner mismatch");
+      require(deployedFeeController.owner() == INITIAL_OPS_OWNER, "FeeController owner mismatch");
       console2.log("FeeController deployed:", feeController);
     } else {
       console2.log("FeeController already deployed:", feeController);
