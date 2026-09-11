@@ -31,7 +31,13 @@ model:
 # Well above the $5/$2 defaults. This is a small codebase but a
 # high-consequence one — reviewers should be free to read every
 # releaser, base contract, and test rather than stopping early.
-max_budget_usd: 15.0
+# Whole-run ceiling, stated as intent only: review-cli 1.10.7 and 1.12.0
+# parse max_budget_usd but enforce only the per-agent budget below, so the
+# real ceiling is agent_budget_usd times every agent staffed. The triage
+# guidance staffs four or more reviewers on a Solidity change; with triage
+# and synthesis that is six agents, or $60 at the per-agent cap, so this
+# number records intent rather than a limit anything enforces.
+max_budget_usd: 40.0
 agent_budget_usd: 10.0
 
 # Turn ceiling set high so the budget is always the binding cap, never
