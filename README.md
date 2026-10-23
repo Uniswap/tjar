@@ -52,6 +52,29 @@ The release configuration — `resource`, `resourceRecipient`, `threshold`, `max
 
 **Fee-on-transfer resources** — `release()` is send-denominated: the redeemer is debited exactly `threshold`, so a fee-on-transfer `resource` delivers `threshold × (1 − f)` to the `resourceRecipient` (the protocol-fee leg is shaved identically). Partners compensate by grossing up the config (`threshold = N / (1 − f)`) and re-tuning via `setConfig` if the token's fee ever changes. If exact delivery is ever worth enforcing on-chain, it belongs in a future receive-denominated `FotExchangeReleaser` variant (require the recipient's balance delta to reach `threshold`), adopted per partner through the standard [releaser rotation](#rotating-releasers) — not in the hot path of every deployment.
 
+#### L1 finalization gas after Glamsterdam
+
+The deployed contracts do not change. The gas of the L1 leg changes after the Glamsterdam activation on Ethereum mainnet (EIP-7773). The numbers below use the EIP values at the time of writing.
+
+`WITHDRAWAL_MIN_GAS` (200,000) is the minimum gas that the L1 messenger gives to the `L1StandardBridge` call that delivers the token to `l1ResourceRecipient`. The messenger forwards all remaining gas minus a reserve, so the bridge call usually gets more. After the activation, a token balance slot for a new holder costs 97,920 state gas (EIP-8037), and this is paid inside the bridge call.
+
+Measured on a fork of Ethereum mainnet with the deployed Base `OptimismPortal`, `L1CrossDomainMessenger` and `L1StandardBridge`. The withdrawal is a copy of a real Base Firepit withdrawal with a changed recipient and token, and a 200,000 minimum gas limit. Gas used by the bridge call:
+
+| Token and recipient | Before the activation | After the activation |
+| --- | ---: | ---: |
+| UNI to an existing holder | 64,634 | 87,534 |
+| UNI to a new holder | 81,734 | 185,454 |
+| USDC to an existing holder | 84,338 | 108,438 |
+| USDC to a new holder | 101,438 | 206,358 |
+
+A transfer of USDC to a new holder uses more than 200,000 gas after the activation. In the measurement it was still delivered, because at the lowest transaction gas limit that finalizes, the messenger gave the bridge call 458,495 gas.
+
+Before the activation, a bridge call that runs out of gas leaves a failed message that anyone can replay with more gas. After the activation, this is not always true. The messenger keeps a 40,000 gas reserve for its bookkeeping after the call, and recording the failed message writes a new slot (97,920 state gas). In a test with a token that uses all gas, finalizations with gas limits of 800,000 and 1,000,000 ended with `WithdrawalFinalized` success `false` and no failed message. That withdrawal cannot be replayed. With gas limits of 3,000,000 and more, the failed message was recorded.
+
+The finalization transaction also writes new slots in the portal and the messenger. It used about 600,000 gas after the activation in the USDC to new holder case, against about 320,000 before. Finalizers that use fixed gas limits must raise them.
+
+Use an `l1ResourceRecipient` that already holds the token. A token that does more work in `transfer` than USDC, or a recipient that is new to the token, can need more than the gas the messenger forwards. After the activation, a bridge call that runs out of gas can make the withdrawal unrecoverable.
+
 #### Burn configurations (what happened to Firepit)
 
 Upstream `protocol-fees` ships **Firepit** releasers that burn the `RESOURCE` by hard-coding the recipient to `0xdead`. TJAR removed them: burning is a *configuration* of the Releaser, not a separate contract — and the immutability a hard-coded burn address appears to offer is weaker than it looks, because the Token Jar owner can always rotate to a different releaser via `setReleaser`. A burn commitment is a property of the whole system (Jar ownership *and* Releaser config), never of the Releaser alone.
