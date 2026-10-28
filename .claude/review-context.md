@@ -1,12 +1,12 @@
 # tjar — review context
 
 TJAR is a Foundry/Solidity `^0.8.29` system for accumulating arbitrary assets in a
-`TokenJar` and allowing permissionless redeemers to exchange a configured revenue token for
+`TokenJar` and allowing permissionless searchers to exchange a configured resource token for
 those assets. It uses solmate, Uniswap v4's `Currency` type, and a small vendored OP Stack
 bridge interface.
 
 The contracts are non-upgradeable. The Factory and FeeController are deployed at deterministic
-addresses on Ethereum, Optimism, Polygon, Base, Arbitrum, and Robinhood Chain. Source changes do
+addresses on Ethereum, Optimism, BNB Chain, Polygon, Base, Arbitrum, and Robinhood Chain. Source changes do
 not alter those deployments; a behavioral fix requires a new deployment and, where applicable,
 a jar-owner or governance action. The reports under `audit/` cover specific historical commits.
 
@@ -40,7 +40,7 @@ is permissionless. It performs the following operations atomically:
 6. `TokenJar.release()` transfers the jar's full balance of each selected asset to `recipient`.
 7. It emits `Released` and invokes the specialized `_afterRelease` hook.
 
-A revert anywhere unwinds the nonce increment, payments, jar transfers, and hook. The resource
+A revert anywhere unwinds the nonce increment, resource transfers, jar transfers, and hook. The resource
 threshold and protocol fee use separate `transferFrom` calls. `releaseCost()` is a current
 quote, not a guarantee; `maxFee` bounds the protocol-fee amount at execution.
 
@@ -56,8 +56,8 @@ quote, not a guarantee; `maxFee` bounds the protocol-fee amount at execution.
   configuration write that fails to invalidate pending releases.
 - **Role changes do not bump the nonce.** `setConfigSetter()` changes authority, not searcher
   terms. The owner may also call `setConfig()` directly.
-- **Base releasers cannot pay the jar or themselves.** Those recipients would respectively make
-  a threshold reclaimable during the sweep or strand the payment. The bridged variant replaces
+- **Base releasers cannot send the threshold to the jar or themselves.** Those recipients would
+  respectively make a threshold reclaimable during the sweep or strand it. The bridged variant replaces
   this rule by deliberately pinning the recipient to itself.
 - **The nonce does not bind all external state.** FeeController state and the resource token's
   own behavior can change without a nonce bump. `maxFee` protects callers from a fee increase;
@@ -85,7 +85,7 @@ quote, not a guarantee; `maxFee` bounds the protocol-fee amount at execution.
   the frozen resource.
 
 Review the collection, jar sweep, and bridge initiation as one transaction. A revert in the hook
-must unwind the earlier payment and asset transfers.
+must unwind the earlier resource and asset transfers.
 
 ## Hostile-token behavior
 
@@ -97,7 +97,7 @@ Both the resource and jar assets are external contracts. Important cases include
 - callbacks attempting to re-enter either release boundary;
 - a resource refusing transfers to the configured resource or fee recipient.
 
-The caller selects the jar assets and pays for the release, so a bad selected asset generally
+The caller selects the jar assets and sends the resource, so a bad selected asset generally
 causes that caller's transaction to revert without blocking releases that omit it. Do not assume
 `safeTransferFrom(amount)` proves an exact sender debit or recipient balance increase.
 
