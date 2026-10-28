@@ -2,7 +2,7 @@
 # Schema reference: packages/review-cli/src/config.ts in Uniswap/internal-tools.
 #
 # tjar is a Foundry Solidity repo: non-upgradeable fee-collection contracts
-# with deterministic singletons on six chains and permissionless release
+# with deterministic singletons on seven chains and permissionless release
 # calls. The engineering context every reviewer reads lives in
 # .claude/review-context.md, not here.
 
@@ -61,8 +61,8 @@ triage:
   guidance: |
     Solidity/Foundry repo — the Uniswap protocol fee collection system.
     Non-upgradeable contracts with deterministic Factory and FeeController
-    deployments on Ethereum, Optimism, Polygon, Base, Arbitrum, and
-    Robinhood Chain. The repository includes Cantina and OpenZeppelin
+    deployments on Ethereum, Optimism, BNB Chain, Polygon, Base, Arbitrum,
+    and Robinhood Chain. The repository includes Cantina and OpenZeppelin
     reports under audit/. A live-contract fix requires a new deployment
     and the relevant jar-owner or governance action, not only a source
     patch. Bias toward staffing more reviewers rather than fewer.
